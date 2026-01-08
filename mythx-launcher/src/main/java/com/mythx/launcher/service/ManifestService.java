@@ -27,6 +27,7 @@ public class ManifestService {
      */
     public boolean fetchManifest() {
         String manifestUrl = LauncherSettings.getClientManifestUrl();
+        LOGGER.info("Beta mode: {}", LauncherSettings.BETA_MODE);
         LOGGER.info("Fetching manifest from: {}", manifestUrl);
 
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -59,8 +60,11 @@ public class ManifestService {
 
                 // Simple JSON parsing (avoiding extra dependencies)
                 String json = response.toString();
+                LOGGER.info("Manifest JSON: {}", json);
                 clientUrl = extractJsonValue(json, "clientUrl");
                 version = extractJsonValue(json, "version");
+                LOGGER.info("Extracted clientUrl: {}", clientUrl);
+                LOGGER.info("Extracted version: {}", version);
 
                 if (clientUrl != null) {
                     // Extract filename from URL
