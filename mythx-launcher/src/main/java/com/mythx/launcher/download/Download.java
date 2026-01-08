@@ -2,6 +2,7 @@ package com.mythx.launcher.download;
 
 import com.mythx.launcher.Launch;
 import com.mythx.launcher.LauncherSettings;
+import com.mythx.launcher.components.LauncherComponent;
 import com.mythx.launcher.utility.RandomString;
 import com.mythx.launcher.utility.Stopwatch;
 import com.mythx.launcher.utility.Utilities;
@@ -84,9 +85,6 @@ public class Download implements Runnable {
             kbPerSec = 0;
             bytesWritten = 0;
 
-            // Update status
-            Launch.getLauncherFrame().setStatusText("Downloading client...");
-
             while (downloadState == DownloadState.DOWNLOADING) {
 
                 byte buffer[];
@@ -99,7 +97,10 @@ public class Download implements Runnable {
 
                 if(stopped) {
                     downloadState = DownloadState.CANCELLED;
-                    Launch.getLauncherFrame().resetPlayButton();
+                    //LauncherComponent.LAUNCH_MESSAGE.getComponent().setText("<html>Welcome to <font color =#90ee90>The Realm</font>, click <font color=#90ee90>'Play Now'</font> on any server to open the client</html>");
+                   // LauncherComponent.PERCENTAGE_COMPLETE.getComponent().setText("");
+                    LauncherComponent.LOADING_BAR.getComponent().load(0);
+                    Launch.getLauncherFrame().repaint();
                     Thread.currentThread().interrupt();
                     Launch.clearDownload();
                     break;
@@ -123,8 +124,7 @@ public class Download implements Runnable {
 
                     lastNum = progress;
 
-                    // Update progress bar
-                    Launch.getLauncherFrame().setProgress(progress);
+                    LauncherComponent.LOADING_BAR.getComponent().load(progress);
 
                     kbPerSec = (bytesWritten / secondsElapsed) / 1000;
 
@@ -138,16 +138,9 @@ public class Download implements Runnable {
                         estimatedTime = 1;
                     }
 
-                    // Update status with download info
-                    String statusText = "Downloading... " + progress + "%";
-                    if (kbPerSec > 0) {
-                        if (mbPerSec > 0) {
-                            statusText += " (" + mbPerSec + " MB/s)";
-                        } else {
-                            statusText += " (" + kbPerSec + " KB/s)";
-                        }
-                    }
-                    Launch.getLauncherFrame().setStatusText(statusText);
+                  //  LauncherComponent.LAUNCH_MESSAGE.getComponent().setText("<html>Download Speed - <font color=#006E00>"+mbPerSec+"MB</font> | Time Remaining: <font color=#8b0000>"+Utilities.formatTime(estimatedTime * 1000)+"</font><html>");
+                   // LauncherComponent.PERCENTAGE_COMPLETE.getComponent().setText("<html><font color=#006E00>"+progress+"%</font> COMPLETED<html>");
+                    Launch.getLauncherFrame().repaint();
                 }
 
                 if(SPEED_TIMER.elapsed(1000)) {
@@ -161,14 +154,10 @@ public class Download implements Runnable {
 
             if (downloadState == DownloadState.DOWNLOADING) {
                 downloadState = DownloadState.COMPLETE;
-                Launch.getLauncherFrame().setStatusText("Launching game...");
-                Launch.getLauncherFrame().setProgress(100);
                 Utilities.launchClient(serverName);
             }
         } catch (Exception e) {
             e.printStackTrace();
-            Launch.getLauncherFrame().setStatusText("Download failed");
-            Launch.getLauncherFrame().resetPlayButton();
             //error();
         } finally {
             if (file != null)
