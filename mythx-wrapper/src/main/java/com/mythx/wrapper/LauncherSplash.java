@@ -22,23 +22,23 @@ public class LauncherSplash extends JFrame {
         setResizable(false);
         getContentPane().setLayout(null);
 
-        // Set the background color to match launcher
-        getContentPane().setBackground(new Color(43, 48, 56));
+        // Set the background color - dark purple theme
+        getContentPane().setBackground(new Color(10, 10, 20));
 
         // Progress label
-        progressLabel = new JLabel("Downloading Image Assets...");
-        progressLabel.setForeground(Color.WHITE);
+        progressLabel = new JLabel("Checking for updates...");
+        progressLabel.setForeground(new Color(200, 180, 255));  // Light purple text
         progressLabel.setFont(new Font("Verdana", Font.BOLD, 18));
         progressLabel.setBounds(0, 20, size.width, 30);
         progressLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
-        // Progress bar
+        // Progress bar - purple theme
         progressBar = new JProgressBar();
         progressBar.setBounds(50, 60, 400, 30);
         progressBar.setBorderPainted(false);
         progressBar.setStringPainted(false);
-        progressBar.setForeground(new Color(34, 139, 34));  // Forest green
-        progressBar.setBackground(new Color(32, 34, 37));
+        progressBar.setForeground(new Color(139, 92, 246));  // Bright purple #8B5CF6
+        progressBar.setBackground(new Color(26, 26, 46));    // Dark purple background
 
         getContentPane().add(progressLabel);
         getContentPane().add(progressBar);
