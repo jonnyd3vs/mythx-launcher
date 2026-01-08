@@ -48,8 +48,8 @@ public class LauncherSettings {
     public static final String PROD_CLIENT_URL = "https://files.mythxrsps.com/client/mythx_client.jar";
 
     // Beta client URLs
-    public static final String BETA_CLIENT_MANIFEST = "https://files.mythxrsps.com/beta/client/manifest.json";
-    public static final String BETA_CLIENT_URL = "https://files.mythxrsps.com/beta/client/mythx_client.jar";
+    public static final String BETA_CLIENT_MANIFEST = "https://beta.cache.rsps.io/mythx/clients/manifest.json";
+    public static final String BETA_CLIENT_URL = "https://beta.cache.rsps.io/mythx/clients/mythx_client.jar";
 
     public static final String SERVER_NAME = "MythX";
 
