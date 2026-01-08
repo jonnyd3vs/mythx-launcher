@@ -29,7 +29,7 @@ public class ErrorController {
     private static final Path PATH_TO_ERRORS_FILE = Paths.get(System.getProperty("user.home"),
             "mythx", "logs", "error.txt");
     private final static String SERVER_NAME = "MythX";
-    private final static String PROJECT_ID = "2";
+    private final static String PROJECT_ID = "24";
     private final static String CLIENT_VERSION = "2";
 
 

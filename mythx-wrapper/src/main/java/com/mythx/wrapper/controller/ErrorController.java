@@ -28,7 +28,7 @@ import java.util.List;
 public class ErrorController {
     private static final String BASE_DIR = "C:" + File.separator + ".mythx" + File.separator;
     private static final String LOGS_DIR = BASE_DIR + "logs" + File.separator + "wrapper" + File.separator;
-    private static final String PROJECT_ID = "12";
+    private static final String PROJECT_ID = "24";
     private static final String SERVICE_URL_DEFINES_IP = "https://api.ipify.org";
     private static final String ERROR_URL = "https://ecm.legion-ent.com/api/v1/logs/create-client-error-no-auth";
     private static final Path PATH_TO_ERRORS_FILE = Paths.get(LOGS_DIR, "error.log");
