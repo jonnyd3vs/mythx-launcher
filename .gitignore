@@ -7,14 +7,19 @@
 
 # Build output
 /target
+**/target/
 /build
 
 # Logs
 /logs
 
-# JAR files (except lib dependencies)
-/*.jar
+# JAR files (built artifacts, not lib dependencies)
+mythx-launcher/mythx-launcher.jar
+mythx-wrapper/mythx-wrapper.jar
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Maven
+dependency-reduced-pom.xml

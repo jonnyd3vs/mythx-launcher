@@ -1,0 +1,57 @@
+name: MythX Wrapper Deployment
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: wrapper-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
+  R2_FOLDER: wrapper
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      - name: Install rclone
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone for R2
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf << EOF
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          endpoint = https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          acl = public-read
+          EOF
+
+      - name: Build wrapper module
+        run: |
+          cd mythx-wrapper
+          mvn -B -ntp clean package -DskipTests
+
+      - name: Upload wrapper to R2
+        run: |
+          rclone copyto \
+            ./mythx-wrapper/mythx-wrapper.jar \
+            r2:${{ env.R2_BUCKET }}/${{ env.R2_FOLDER }}/mythx-wrapper.jar
+
+          echo "Wrapper uploaded to: https://files.mythxrsps.com/wrapper/mythx-wrapper.jar"
