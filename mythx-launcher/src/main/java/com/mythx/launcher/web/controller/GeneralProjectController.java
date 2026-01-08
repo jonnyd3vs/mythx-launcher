@@ -16,7 +16,7 @@ import java.io.IOException;
 // perhaps should rename this controller
 public class GeneralProjectController {
     private final static Logger LOGGER = LoggerFactory.getLogger(GeneralProjectController.class);
-    private final static String DOWN_LOAD_URL = "https://ecm.legion-ent.com/api/v1/projects/2";
+    private final static String DOWN_LOAD_URL = "https://ecm.legion-ent.com/api/v1/projects/24";
     private final CloseableHttpClient httpClient;
     private final Gson gson;
 

@@ -28,7 +28,7 @@ public class UpdateGrabber {
 
         try {
 
-            url = new URL("http://ecm.legion-ent.com/api/v1/game/latest-updates/2");
+            url = new URL("https://ecm.legion-ent.com/api/v1/game/latest-updates/24");
 
             URLConnection hc = url.openConnection();
             hc.setRequestProperty("User-Agent", "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.4; en-US; rv:1.9.2.2) Gecko/20100316 Firefox/3.6.2");

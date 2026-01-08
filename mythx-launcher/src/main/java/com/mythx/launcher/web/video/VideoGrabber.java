@@ -19,7 +19,7 @@ import java.net.URLConnection;
  */
 public class VideoGrabber {
 
-    public static final String LATEST_VIDEO_URL = "http://ecm.legion-ent.com/api/v1/game/latest-youtube-video/2";
+    public static final String LATEST_VIDEO_URL = "https://ecm.legion-ent.com/api/v1/game/latest-youtube-video/24";
 
     private final static Logger LOGGER = LoggerFactory.getLogger(VideoGrabber.class);
 
