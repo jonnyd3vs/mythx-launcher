@@ -3,8 +3,7 @@ package com.mythx.launcher.components.impl;
 import com.mythx.launcher.Launch;
 import com.mythx.launcher.LauncherSettings;
 import com.mythx.launcher.components.CreativeComponent;
-import com.mythx.launcher.web.controller.GeneralProjectController;
-import com.mythx.launcher.web.service.GeneralProjectService;
+import com.mythx.launcher.service.ManifestService;
 
 import javax.swing.*;
 import java.awt.*;
@@ -16,7 +15,7 @@ import java.awt.event.MouseEvent;
  */
 public class PlayNowButton extends CreativeComponent {
     private String serverName;
-    private final GeneralProjectService generalProjectService = new GeneralProjectService(new GeneralProjectController());
+    private final ManifestService manifestService = new ManifestService();
 
     public PlayNowButton() {
         serverName = "MythX";
@@ -27,8 +26,18 @@ public class PlayNowButton extends CreativeComponent {
         addMouseListener(new MouseAdapter() {
 
             public void mouseClicked(MouseEvent evt) {
-                String downloadUrl = generalProjectService.getDownLoadUrl();
-                launch("https://storage.googleapis.com/legionent/mythx_client.jar", serverName.toLowerCase());
+                // Fetch download URL from manifest.json
+                if (manifestService.fetchManifest()) {
+                    String downloadUrl = manifestService.getClientUrl();
+                    String filename = manifestService.getClientFilename();
+                    System.out.println("Manifest version: " + manifestService.getVersion());
+                    System.out.println("Downloading from: " + downloadUrl);
+                    launch(downloadUrl, filename != null ? filename : serverName.toLowerCase() + ".jar");
+                } else {
+                    // Fallback to default URL if manifest fetch fails
+                    System.out.println("Manifest fetch failed, using fallback URL");
+                    launch(LauncherSettings.getClientDownloadUrl(), serverName.toLowerCase() + ".jar");
+                }
             }
 
             public void mouseEntered(MouseEvent evt) {
@@ -46,25 +55,15 @@ public class PlayNowButton extends CreativeComponent {
         return new Rectangle(615, 403, 248, 64);
     }
 
-    public void launch(String downloadUrl, String serverName) {
+    public void launch(String downloadUrl, String filename) {
         if(Launch.getDownload() == null) {
-            // if(UpdateCheck.updateExists() != 0) {
-
-            if(LauncherSettings.BETA_MODE) {
-                downloadUrl = downloadUrl.replaceAll("legionent", "rsps-beta");
-
-                System.out.println("Download url : "+downloadUrl);
-            }
-
-            Launch.resetDownload(downloadUrl, serverName+".dat").start();
-            /*} else {
-                Utilities.launchClient();
-            }*/
+            System.out.println("Starting download: " + downloadUrl);
+            Launch.resetDownload(downloadUrl, filename).start();
         }
     }
 
 
     public void setServerName(String serverName) {
         this.serverName = serverName;
-    } // right now does not work correctly in PlayNowButton will execute reset value
+    }
 }
