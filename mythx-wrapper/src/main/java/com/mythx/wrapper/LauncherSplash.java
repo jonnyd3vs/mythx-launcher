@@ -122,9 +122,9 @@ public class LauncherSplash extends JFrame {
         topPanel.setOpaque(false);
         topPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 20));
 
-        JLabel closeBtn = new JLabel("✕");
-        closeBtn.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        closeBtn.setForeground(TEXT_SECONDARY);
+        ImageIcon closeIcon = new ImageIcon(getClass().getResource("/images/close.png"));
+        ImageIcon closeHoverIcon = new ImageIcon(getClass().getResource("/images/close_hover.png"));
+        JLabel closeBtn = new JLabel(closeIcon);
         closeBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         closeBtn.addMouseListener(new MouseAdapter() {
             @Override
@@ -133,11 +133,11 @@ public class LauncherSplash extends JFrame {
             }
             @Override
             public void mouseEntered(MouseEvent e) {
-                closeBtn.setForeground(Color.RED);
+                closeBtn.setIcon(closeHoverIcon);
             }
             @Override
             public void mouseExited(MouseEvent e) {
-                closeBtn.setForeground(TEXT_SECONDARY);
+                closeBtn.setIcon(closeIcon);
             }
         });
         topPanel.add(closeBtn);
