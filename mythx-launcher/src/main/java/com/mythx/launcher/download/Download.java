@@ -66,6 +66,18 @@ public class Download implements Runnable {
 
             int contentLength = connection.getContentLength();
 
+            // Fallback for GCS which may not return Content-Length directly
+            if (contentLength < 1) {
+                String gcsLength = connection.getHeaderField("x-goog-stored-content-length");
+                if (gcsLength != null) {
+                    try {
+                        contentLength = Integer.parseInt(gcsLength);
+                    } catch (NumberFormatException e) {
+                        // Ignore parse errors
+                    }
+                }
+            }
+
             if (contentLength < 1) {
                // error();
             }

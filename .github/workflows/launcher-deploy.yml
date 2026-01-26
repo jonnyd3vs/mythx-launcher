@@ -8,9 +8,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
-  R2_FOLDER: launcher
-  LAUNCHER_BASE_URL: https://files.mythxrsps.com/launcher
+  GCS_BUCKET: flippers
 
 jobs:
   deploy:
@@ -27,113 +25,24 @@ jobs:
           java-version: '8'
           cache: maven
 
-      - name: Install rclone
-        run: |
-          curl https://rclone.org/install.sh | sudo bash
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}
 
-      - name: Configure rclone for R2
-        run: |
-          mkdir -p ~/.config/rclone
-          cat > ~/.config/rclone/rclone.conf << EOF
-          [r2]
-          type = s3
-          provider = Cloudflare
-          access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}
-          secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          endpoint = https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          acl = public-read
-          EOF
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Build launcher module
         run: |
           cd mythx-launcher
           mvn -B -ntp clean package -DskipTests
 
-      - name: Generate version info
-        id: version
+      - name: Upload launcher to GCS
         run: |
-          SUFFIX=$(openssl rand -hex 6)
-          TIMESTAMP=$(date +%s)
-          VERSION="${GITHUB_RUN_NUMBER}"
-          echo "suffix=$SUFFIX" >> $GITHUB_OUTPUT
-          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "launcher_filename=mythx_launcher_${SUFFIX}.jar" >> $GITHUB_OUTPUT
-          echo "Generated version: $VERSION"
-          echo "Launcher filename: mythx_launcher_${SUFFIX}.jar"
+          gsutil cp ./mythx-launcher/mythx-launcher.jar gs://${{ env.GCS_BUCKET }}/mythx_launcher.jar
 
-      - name: Upload versioned launcher to R2
+      - name: Deployment summary
         run: |
-          rclone copyto \
-            ./mythx-launcher/mythx-launcher.jar \
-            r2:${{ env.R2_BUCKET }}/${{ env.R2_FOLDER }}/${{ steps.version.outputs.launcher_filename }}
-
-      - name: Fetch existing manifest
-        id: existing_manifest
-        continue-on-error: true
-        run: |
-          rclone cat r2:${{ env.R2_BUCKET }}/${{ env.R2_FOLDER }}/manifest.json > existing_manifest.json 2>/dev/null || echo '{"versions":[]}' > existing_manifest.json
-          echo "Existing manifest:"
-          cat existing_manifest.json
-
-      - name: Generate and upload manifest
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          LAUNCHER_FILENAME: ${{ steps.version.outputs.launcher_filename }}
-          TIMESTAMP: ${{ steps.version.outputs.timestamp }}
-          GIT_SHA: ${{ github.sha }}
-        run: |
-          sudo apt-get update && sudo apt-get install -y jq
-
-          # Create new version entry
-          cat > new_version.json << EOF
-          {
-            "version": "${VERSION}",
-            "clientUrl": "${{ env.LAUNCHER_BASE_URL }}/${LAUNCHER_FILENAME}",
-            "clientFilename": "${LAUNCHER_FILENAME}",
-            "timestamp": ${TIMESTAMP},
-            "gitSha": "${GIT_SHA}"
-          }
-          EOF
-
-          # Combine with existing versions, keep last 3
-          jq -s '.[0] as $new | .[1].versions as $old | [$new] + ($old // []) | .[0:3]' \
-            new_version.json existing_manifest.json > versions_array.json
-
-          # Create final manifest
-          cat > manifest.json << EOF
-          {
-            "version": "${VERSION}",
-            "clientUrl": "${{ env.LAUNCHER_BASE_URL }}/${LAUNCHER_FILENAME}",
-            "timestamp": ${TIMESTAMP},
-            "versions": $(cat versions_array.json)
-          }
-          EOF
-
-          jq '.' manifest.json > manifest_valid.json && mv manifest_valid.json manifest.json
-
-          echo "New manifest:"
-          cat manifest.json
-
-          rclone copyto manifest.json r2:${{ env.R2_BUCKET }}/${{ env.R2_FOLDER }}/manifest.json
-
-      - name: Cleanup old versions
-        run: |
-          VERSIONS_TO_KEEP=$(cat manifest.json | jq -r '.versions[].clientFilename')
-          ALL_LAUNCHER_FILES=$(rclone lsf r2:${{ env.R2_BUCKET }}/${{ env.R2_FOLDER }}/ | grep "mythx_launcher_.*\.jar" || true)
-
-          echo "Versions to keep:"
-          echo "$VERSIONS_TO_KEEP"
-          echo ""
-          echo "All launcher files found:"
-          echo "$ALL_LAUNCHER_FILES"
-          echo ""
-
-          for file in $ALL_LAUNCHER_FILES; do
-            if ! echo "$VERSIONS_TO_KEEP" | grep -q "$file"; then
-              echo "Deleting old version: $file"
-              rclone deletefile r2:${{ env.R2_BUCKET }}/${{ env.R2_FOLDER }}/$file || true
-            else
-              echo "Keeping: $file"
-            fi
-          done
+          echo "=== Deployment Complete ==="
+          echo "Launcher URL: https://storage.googleapis.com/${{ env.GCS_BUCKET }}/mythx_launcher.jar"

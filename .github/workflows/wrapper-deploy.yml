@@ -8,8 +8,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
-  R2_FOLDER: wrapper
+  GCS_BUCKET: flippers
 
 jobs:
   deploy:
@@ -26,32 +25,24 @@ jobs:
           java-version: '8'
           cache: maven
 
-      - name: Install rclone
-        run: |
-          curl https://rclone.org/install.sh | sudo bash
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}
 
-      - name: Configure rclone for R2
-        run: |
-          mkdir -p ~/.config/rclone
-          cat > ~/.config/rclone/rclone.conf << EOF
-          [r2]
-          type = s3
-          provider = Cloudflare
-          access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}
-          secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          endpoint = https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          acl = public-read
-          EOF
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Build wrapper module
         run: |
           cd mythx-wrapper
           mvn -B -ntp clean package -DskipTests
 
-      - name: Upload wrapper to R2
+      - name: Upload wrapper to GCS
         run: |
-          rclone copyto \
-            ./mythx-wrapper/mythx-wrapper.jar \
-            r2:${{ env.R2_BUCKET }}/${{ env.R2_FOLDER }}/mythx-wrapper.jar
+          gsutil cp ./mythx-wrapper/mythx-wrapper.jar gs://${{ env.GCS_BUCKET }}/mythx_wrapper.jar
 
-          echo "Wrapper uploaded to: https://files.mythxrsps.com/wrapper/mythx-wrapper.jar"
+      - name: Deployment summary
+        run: |
+          echo "=== Deployment Complete ==="
+          echo "Wrapper URL: https://storage.googleapis.com/${{ env.GCS_BUCKET }}/mythx_wrapper.jar"

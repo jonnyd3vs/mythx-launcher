@@ -6,6 +6,7 @@ import com.mythx.wrapper.Launch;
 import com.mythx.wrapper.config.Config;
 import com.mythx.wrapper.config.HttpClientConfig;
 
+import com.mythx.wrapper.model.LauncherDataResponse;
 import com.mythx.wrapper.model.Version;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpEntity;
@@ -96,29 +97,18 @@ public class UpdateService {
 
     public void loadRemoteVersion() {
         Gson gson = new Gson();
-        String manifestUrl = Config.get().getLauncherManifestUrl();
-        HttpGet httpGet = new HttpGet(manifestUrl);
+        String versionUrl = Config.get().getLauncherVersionUrl();
+        log.info("Fetching launcher version from: {}", versionUrl);
+        HttpGet httpGet = new HttpGet(versionUrl);
 
         try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
             String responseString = EntityUtils.toString(response.getEntity());
-            // Parse manifest.json format directly
-            // { "version": "42", "clientUrl": "...", "timestamp": 123, "versions": [...] }
-            com.google.gson.JsonObject manifest = gson.fromJson(responseString, com.google.gson.JsonObject.class);
-
-            String version = manifest.get("version").getAsString();
-            String clientUrl = manifest.get("clientUrl").getAsString();
-
-            // Extract filename from URL (e.g., "mythx_client_abc123.jar" -> "mythx_client_abc123")
-            String filename = clientUrl.substring(clientUrl.lastIndexOf('/') + 1);
-            if (filename.endsWith(".jar")) {
-                filename = filename.substring(0, filename.length() - 4);
-            }
-
-            Version remoteVersion = new Version(version, "0", filename, clientUrl);
-            Config.get().setRemoteVersion(remoteVersion);
-            log.info("Remote version loaded: " + remoteVersion);
+            // Parse ECM API response format: { "status": "...", "message": "...", "data": { version, size, filename, url } }
+            LauncherDataResponse dataResponse = gson.fromJson(responseString, LauncherDataResponse.class);
+            Config.get().setRemoteVersion(dataResponse.getData());
+            log.info("Remote version loaded: {}", dataResponse.getData());
         } catch (IOException e) {
-            log.warn("Error retrieving data from manifest ", e);
+            log.warn("Error retrieving data from API", e);
         }
     }
 
@@ -169,8 +159,8 @@ public class UpdateService {
 
     public void downloadJar(String fileURL, String fileName) {
         String savePath = LAUNCHER_DIR + fileName + ".jar"; // Save launcher to launcher directory
-        
-        
+
+
 
         CloseableHttpClient client = HttpClientConfig.getHttpClient();
         String cacheBustedUrl = fileURL + "?t=" + System.currentTimeMillis();

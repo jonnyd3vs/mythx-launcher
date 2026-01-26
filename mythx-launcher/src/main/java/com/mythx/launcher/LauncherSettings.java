@@ -43,27 +43,31 @@ public class LauncherSettings {
      */
     public static String SECONDARY_SERVERS_FILE = "http://therealmrsps.com/servers";
 
-    // Production client URLs
-    public static final String PROD_CLIENT_MANIFEST = "https://files.mythxrsps.com/client/manifest.json";
-    public static final String PROD_CLIENT_URL = "https://files.mythxrsps.com/client/mythx_client.jar";
-
-    // Beta client URLs
-    public static final String BETA_CLIENT_MANIFEST = "https://beta.cache.rsps.io/mythx/clients/manifest.json";
-    public static final String BETA_CLIENT_URL = "https://beta.cache.rsps.io/mythx/clients/mythx_client.jar";
+    // Google Cloud Storage client URLs
+    public static final String PROD_CLIENT_URL = "https://storage.googleapis.com/flippers/mythx_client.jar";
+    // Beta mode transforms the URL by replacing "flippers" with "rsps-beta"
+    public static final String BETA_CLIENT_URL = "https://storage.googleapis.com/rsps-beta/mythx_client.jar";
 
     public static final String SERVER_NAME = "MythX";
-
-    /**
-     * Get the appropriate client manifest URL based on beta mode
-     */
-    public static String getClientManifestUrl() {
-        return BETA_MODE ? BETA_CLIENT_MANIFEST : PROD_CLIENT_MANIFEST;
-    }
 
     /**
      * Get the appropriate client download URL based on beta mode
      */
     public static String getClientDownloadUrl() {
         return BETA_MODE ? BETA_CLIENT_URL : PROD_CLIENT_URL;
+    }
+
+    /**
+     * Get the server name for file storage (used in client-version.json)
+     */
+    public static String getServerName() {
+        return BETA_MODE ? "Beta_mythx" : "mythx";
+    }
+
+    /**
+     * Get the client filename for local storage
+     */
+    public static String getClientFilename() {
+        return getServerName() + ".dat";
     }
 }

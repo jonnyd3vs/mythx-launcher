@@ -3,6 +3,9 @@ package com.mythx.launcher.utility;
 import com.mythx.launcher.Launch;
 import com.mythx.launcher.LauncherSettings;
 import com.mythx.launcher.components.LauncherComponent;
+import com.mythx.launcher.jdk.JdkDownloader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -18,6 +21,10 @@ import java.net.URLConnection;
  * @author Jonny
  */
 public class Utilities {
+    private static final Logger LOGGER = LoggerFactory.getLogger(Utilities.class);
+
+    // Cached JDK path
+    private static String cachedJavaPath = null;
 
     public static int getPercent(int current, int pixels) {
         return (int) ((pixels) * .01 * current);
@@ -90,16 +97,43 @@ public class Utilities {
     }
 
     public static void launchClient(String serverName) {
-
         try {
-            Process p = Runtime.getRuntime().exec(new String[]{ "java", "-Xms512m", "-Xmx1024m", "-jar", LauncherSettings.SAVE_DIR + serverName, String.valueOf(LauncherSettings.BETA_MODE)});
-           // LauncherComponent.LAUNCH_MESSAGE.getComponent().setText("<html>Welcome to <font color =#90ee90>The Realm</font>, click <font color=#90ee90>'Play Now'</font> on any server to open the client</html>");
-            //LauncherComponent.PERCENTAGE_COMPLETE.getComponent().setText("");
+            // Get JDK path (uses cached path or downloads if needed)
+            String javaPath = ensureJdk11AndGetPath();
+            LOGGER.info("Launching client with Java: {}", javaPath);
+
+            String[] command = new String[]{
+                javaPath,
+                "-Xms512m",
+                "-Xmx1024m",
+                "-jar",
+                LauncherSettings.SAVE_DIR + serverName,
+                String.valueOf(LauncherSettings.BETA_MODE)
+            };
+
+            LOGGER.info("Launch command: {} -Xms512m -Xmx1024m -jar {} {}",
+                    javaPath, LauncherSettings.SAVE_DIR + serverName, LauncherSettings.BETA_MODE);
+
+            Process p = Runtime.getRuntime().exec(command);
             LauncherComponent.LOADING_BAR.getComponent().load(0);
             Launch.download = null;
         } catch (Exception e) {
+            LOGGER.error("Failed to launch client", e);
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Ensure JDK 11 is installed and return the path to java executable
+     */
+    private static String ensureJdk11AndGetPath() {
+        if (cachedJavaPath != null) {
+            return cachedJavaPath;
+        }
+
+        JdkDownloader downloader = new JdkDownloader();
+        cachedJavaPath = downloader.ensureJdk11Installed();
+        return cachedJavaPath;
     }
 
     /**

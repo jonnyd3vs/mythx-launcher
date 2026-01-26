@@ -17,9 +17,6 @@ public class Config {
     private static final String BASE_DIR = "C:" + File.separator + ".mythx" + File.separator;
     private final String SAVE_DIR = System.getProperty("user.home") + File.separator;
 
-    // Single launcher manifest URL (launcher updates are always from production)
-    private static final String LAUNCHER_MANIFEST = "https://files.mythxrsps.com/launcher/manifest.json";
-
     private String launcherVersionUrl;
     private Version localVersion;
     private Version remoteVersion;
@@ -59,10 +56,10 @@ public class Config {
     }
 
     /**
-     * Returns the launcher manifest URL (always production - there's only one launcher).
+     * Returns the launcher version URL from properties.
      */
-    public String getLauncherManifestUrl() {
-        return launcherVersionUrl != null ? launcherVersionUrl : LAUNCHER_MANIFEST;
+    public String getLauncherVersionUrl() {
+        return launcherVersionUrl;
     }
 
     public static String getBaseDir() {

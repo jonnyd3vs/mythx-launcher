@@ -33,6 +33,12 @@ public class Launch {
         try {
             UpdateService updateService = new UpdateService();
             updateService.init(); // load local and remote version, check updates and download jar if necessary
+
+            // Verify we have a valid local version before attempting to run
+            if (Config.get().getLocalVersion() == null || Config.get().getLocalVersion().getFilename() == null) {
+                throw new RuntimeException("Failed to download launcher. Please check your internet connection and try again.");
+            }
+
             RunJarService.runJar(Config.get().getLocalVersion().getFilename() + ".jar"); // run launcher
         } catch (Exception ex) {
             log.error("Failed to start launcher", ex);

@@ -4,6 +4,7 @@ import com.mythx.launcher.cache.CacheDownloader;
 import com.mythx.launcher.download.Download;
 import com.mythx.launcher.fonts.LauncherFont;
 import com.mythx.launcher.handler.GlobalExceptionHandler;
+import com.mythx.launcher.service.ClientVersionService;
 import com.mythx.launcher.utility.SSLTool;
 import com.mythx.launcher.utility.Utilities;
 import com.mythx.launcher.web.update.UpdateGrabber;
@@ -37,6 +38,9 @@ public class Launch {
 
         // Create necessary directories
         createDirectories();
+
+        // Load local client versions
+        ClientVersionService.loadLocalVersions();
 
         launcherSplash = new LauncherSplash();
         launcherSplash.start();
