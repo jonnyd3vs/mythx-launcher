@@ -11,7 +11,7 @@ import java.util.List;
 @Slf4j
 public class RunJarService {
 
-    private static final String BASE_DIR = "C:" + File.separator + ".mythx" + File.separator;
+    private static final String BASE_DIR = System.getProperty("user.home") + File.separator + ".mythx" + File.separator;
     private static final String LAUNCHER_DIR = BASE_DIR + "launcher" + File.separator;
 
     /**

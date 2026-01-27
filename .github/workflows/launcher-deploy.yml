@@ -42,6 +42,10 @@ jobs:
         run: |
           gcloud storage cp ./mythx-launcher/mythx-launcher.jar gs://${{ env.GCS_BUCKET }}/mythx_launcher.jar
 
+      - name: Make file public
+        run: |
+          gcloud storage objects update gs://${{ env.GCS_BUCKET }}/mythx_launcher.jar --add-acl-grant=entity=allUsers,role=READER
+
       - name: Deployment summary
         run: |
           echo "=== Deployment Complete ==="

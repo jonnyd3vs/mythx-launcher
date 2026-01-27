@@ -14,7 +14,7 @@ import java.net.URISyntaxException;
 public class Config {
     private static Config instance;
 
-    private static final String BASE_DIR = "C:" + File.separator + ".mythx" + File.separator;
+    private static final String BASE_DIR = System.getProperty("user.home") + File.separator + ".mythx" + File.separator;
     private final String SAVE_DIR = System.getProperty("user.home") + File.separator;
 
     private String launcherVersionUrl;

@@ -12,7 +12,7 @@ import java.io.File;
 
 @Slf4j
 public class Launch {
-    private static final String BASE_DIR = "C:" + File.separator + ".mythx" + File.separator;
+    private static final String BASE_DIR = System.getProperty("user.home") + File.separator + ".mythx" + File.separator;
     private static LauncherSplash launcherSplash;
 
     public static void main(String[] args) {

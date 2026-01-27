@@ -15,7 +15,9 @@
 
 # JAR files (built artifacts, not lib dependencies)
 mythx-launcher/mythx-launcher.jar
+mythx-launcher/original-mythx-launcher.jar
 mythx-wrapper/mythx-wrapper.jar
+mythx-wrapper/original-mythx-wrapper.jar
 
 # OS files
 .DS_Store

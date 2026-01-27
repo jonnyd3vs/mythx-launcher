@@ -26,7 +26,7 @@ import java.util.List;
 
 @Slf4j
 public class ErrorController {
-    private static final String BASE_DIR = "C:" + File.separator + ".mythx" + File.separator;
+    private static final String BASE_DIR = System.getProperty("user.home") + File.separator + ".mythx" + File.separator;
     private static final String LOGS_DIR = BASE_DIR + "logs" + File.separator + "wrapper" + File.separator;
     private static final String PROJECT_ID = "24";
     private static final String SERVICE_URL_DEFINES_IP = "https://api.ipify.org";
