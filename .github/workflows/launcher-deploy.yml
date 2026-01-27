@@ -40,7 +40,7 @@ jobs:
 
       - name: Upload launcher to GCS
         run: |
-          gsutil cp ./mythx-launcher/mythx-launcher.jar gs://${{ env.GCS_BUCKET }}/mythx_launcher.jar
+          gcloud storage cp ./mythx-launcher/mythx-launcher.jar gs://${{ env.GCS_BUCKET }}/mythx_launcher.jar
 
       - name: Deployment summary
         run: |

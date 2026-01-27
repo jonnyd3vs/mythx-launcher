@@ -40,7 +40,7 @@ jobs:
 
       - name: Upload wrapper to GCS
         run: |
-          gsutil cp ./mythx-wrapper/mythx-wrapper.jar gs://${{ env.GCS_BUCKET }}/mythx_wrapper.jar
+          gcloud storage cp ./mythx-wrapper/mythx-wrapper.jar gs://${{ env.GCS_BUCKET }}/mythx_wrapper.jar
 
       - name: Deployment summary
         run: |
