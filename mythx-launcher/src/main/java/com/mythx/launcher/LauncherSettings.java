@@ -11,7 +11,7 @@ public class LauncherSettings {
     /**
      * Base directory for all MythX files
      */
-    public static final String BASE_DIR = "C:" + File.separator + ".mythx" + File.separator;
+    public static final String BASE_DIR = System.getProperty("user.home") + File.separator + ".mythx" + File.separator;
 
     /**
      * Enables developer only settings

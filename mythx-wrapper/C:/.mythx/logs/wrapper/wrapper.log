@@ -1,0 +1,12 @@
+2026-01-27 00:19:26 [main] INFO  Config - Wrapper JAR name: mythx-wrapper.jar
+2026-01-27 00:19:26 [main] INFO  Launch - Beta mode: false
+2026-01-27 00:19:27 [main] INFO  UpdateService - Directory created: /home/ubuntu/.mythx/launcher
+2026-01-27 00:19:27 [main] INFO  UpdateService - Fetching launcher version from: https://dev-ecm.legion-ent.com/api/v1/launcher/launcher-metadata?network=mythx
+2026-01-27 00:19:27 [main] INFO  UpdateService - Remote version loaded: Version(version=1, size=null, filename=mythx-launcher, url=https://storage.googleapis.com/flippers/mythx_launcher.jar)
+2026-01-27 00:19:27 [main] INFO  UpdateService - Local version is missing. Start download jar
+2026-01-27 00:19:27 [main] INFO  UpdateService - https://storage.googleapis.com/flippers/mythx_launcher.jar
+2026-01-27 00:19:27 [main] INFO  UpdateService - mythx-launcher
+2026-01-27 00:19:27 [main] INFO  UpdateService - Download completed: /home/ubuntu/.mythx/launcher/mythx-launcher.jar
+2026-01-27 00:19:27 [main] INFO  RunJarService - Starting launcher JAR
+2026-01-27 00:19:27 [main] INFO  RunJarService - Launching with beta mode: false
+2026-01-27 00:19:27 [Thread-0] INFO  RunJarService - Wrapper is shutting down after launching the JAR...
