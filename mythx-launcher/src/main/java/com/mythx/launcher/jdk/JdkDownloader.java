@@ -75,7 +75,33 @@ public class JdkDownloader {
             return false;
         }
 
+        // Clean up failed/incomplete extraction - directory exists but java.exe missing
+        if (jdkDir.exists() && !javaExe.exists()) {
+            LOGGER.warn("Found incomplete JDK installation at {}, cleaning up...", getJdkDir());
+            deleteDirectory(jdkDir);
+        }
+
         return true;
+    }
+
+    /**
+     * Recursively delete a directory and all its contents
+     */
+    private void deleteDirectory(File directory) {
+        if (directory.exists()) {
+            File[] files = directory.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isDirectory()) {
+                        deleteDirectory(file);
+                    } else {
+                        file.delete();
+                    }
+                }
+            }
+            directory.delete();
+            LOGGER.info("Deleted directory: {}", directory.getAbsolutePath());
+        }
     }
 
     /**
