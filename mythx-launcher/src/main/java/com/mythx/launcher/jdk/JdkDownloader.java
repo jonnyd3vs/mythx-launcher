@@ -1,12 +1,15 @@
 package com.mythx.launcher.jdk;
 
 import com.mythx.launcher.LauncherSettings;
+import com.mythx.launcher.web.config.HttpClientConfig;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -213,73 +216,87 @@ public class JdkDownloader {
         new File(targetDir).mkdirs();
         LOGGER.info("Created JDK target directory: {}", targetDir);
 
-        // Download ZIP with cache-busting
+        // Ensure settings dir exists for ZIP download
+        new File(SETTINGS_DIR).mkdirs();
+
+        // Download ZIP with cache-busting using Apache HttpClient (more reliable than HttpURLConnection)
         String cacheBustedUrl = downloadUrl + "?t=" + System.currentTimeMillis();
         LOGGER.info("Downloading JDK from: {}", cacheBustedUrl);
-        URL url = new URL(cacheBustedUrl);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestProperty("User-Agent", "MythX-Launcher");
-        conn.setConnectTimeout(30000);
-        conn.setReadTimeout(30000);
+        
+        CloseableHttpClient httpClient = HttpClientConfig.getHttpClient();
+        HttpGet request = new HttpGet(cacheBustedUrl);
+        request.setHeader("User-Agent", "MythX-Launcher");
 
-        int responseCode = conn.getResponseCode();
-        LOGGER.info("HTTP response code: {}", responseCode);
-        if (responseCode != 200) {
-            throw new IOException("Failed to download JDK: HTTP " + responseCode);
-        }
-
-        int contentLength = conn.getContentLength();
-        if (contentLength == -1) {
-            // Try GCS-specific header
-            String gcsLength = conn.getHeaderField("x-goog-stored-content-length");
-            if (gcsLength != null) {
-                contentLength = Integer.parseInt(gcsLength);
+        try (CloseableHttpResponse response = httpClient.execute(request)) {
+            int statusCode = response.getStatusLine().getStatusCode();
+            LOGGER.info("HTTP response code: {}", statusCode);
+            
+            if (statusCode != 200) {
+                throw new IOException("Failed to download JDK: HTTP " + statusCode + " - " + response.getStatusLine().getReasonPhrase());
             }
-        }
-        LOGGER.info("Content length: {} bytes", contentLength);
 
-        window.setStatus("Downloading Java 11...");
-        window.setTotalBytes(contentLength);
-
-        try (InputStream in = conn.getInputStream();
-             FileOutputStream out = new FileOutputStream(zipPath)) {
-
-            byte[] buffer = new byte[8192];
-            int bytesRead;
-            long totalRead = 0;
-
-            while ((bytesRead = in.read(buffer)) != -1) {
-                out.write(buffer, 0, bytesRead);
-                totalRead += bytesRead;
-                window.setBytesDownloaded(totalRead);
+            HttpEntity entity = response.getEntity();
+            if (entity == null) {
+                throw new IOException("Empty response from server");
             }
-            LOGGER.info("Downloaded {} bytes to {}", totalRead, zipPath);
+
+            long contentLength = entity.getContentLength();
+            LOGGER.info("Content length: {} bytes", contentLength);
+
+            window.setStatus("Downloading Java 11...");
+            window.setTotalBytes(contentLength > 0 ? contentLength : 70_000_000); // Estimate ~70MB if unknown
+
+            File zipFile = new File(zipPath);
+            try (InputStream in = entity.getContent();
+                 FileOutputStream out = new FileOutputStream(zipFile)) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                long totalRead = 0;
+
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                    totalRead += bytesRead;
+                    window.setBytesDownloaded(totalRead);
+                }
+                LOGGER.info("Downloaded {} bytes to {}", totalRead, zipPath);
+            }
+
+            // Verify ZIP file exists and has content
+            if (!zipFile.exists() || zipFile.length() == 0) {
+                throw new IOException("ZIP file is empty or missing: " + zipPath);
+            }
+            LOGGER.info("ZIP file size: {} bytes", zipFile.length());
+
+            // Extract ZIP to target directory (not SETTINGS_DIR!)
+            window.setStatus("Extracting Java 11...");
+            LOGGER.info("Extracting JDK to: {}", targetDir);
+            extractZip(zipPath, targetDir);
+
+            // Verify extraction succeeded
+            File javaExe = new File(getJavaExecutable());
+            LOGGER.info("Checking for java executable at: {}", javaExe.getAbsolutePath());
+            if (!javaExe.exists()) {
+                LOGGER.error("Extraction failed - java executable not found!");
+                // List what was extracted for debugging
+                File[] extracted = new File(targetDir).listFiles();
+                if (extracted != null) {
+                    LOGGER.error("Contents of {}: ", targetDir);
+                    for (File f : extracted) {
+                        LOGGER.error("  - {}", f.getName());
+                    }
+                }
+                throw new IOException("Extraction failed - java.exe not found at: " + javaExe.getAbsolutePath());
+            }
+
+            // Delete ZIP after successful extraction
+            if (zipFile.delete()) {
+                LOGGER.info("Deleted temp ZIP file");
+            } else {
+                LOGGER.warn("Could not delete temp ZIP file: {}", zipPath);
+            }
+            window.setStatus("Java 11 installed successfully");
         }
-
-        // Verify ZIP file exists and has content
-        File zipFile = new File(zipPath);
-        if (!zipFile.exists() || zipFile.length() == 0) {
-            throw new IOException("ZIP file is empty or missing: " + zipPath);
-        }
-        LOGGER.info("ZIP file size: {} bytes", zipFile.length());
-
-        // Extract ZIP to target directory (not SETTINGS_DIR!)
-        window.setStatus("Extracting Java 11...");
-        LOGGER.info("Extracting JDK to: {}", targetDir);
-        extractZip(zipPath, targetDir);
-
-        // Verify extraction succeeded
-        File javaExe = new File(getJavaExecutable());
-        LOGGER.info("Checking for java executable at: {}", javaExe.getAbsolutePath());
-        if (!javaExe.exists()) {
-            LOGGER.error("Extraction failed - java executable not found!");
-            throw new IOException("Extraction failed - java.exe not found at: " + javaExe.getAbsolutePath());
-        }
-
-        // Delete ZIP after extraction
-        zipFile.delete();
-        LOGGER.info("Deleted temp ZIP file");
-        window.setStatus("Java 11 installed successfully");
     }
 
     /**
