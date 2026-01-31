@@ -265,11 +265,13 @@ public class JdkDownloader {
             }
             LOGGER.info("ZIP file size: {} bytes", zipFile.length());
 
-            // Extract ZIP to SETTINGS_DIR - ZIP already contains java-11-windows-64/ folder
+            // Extract ZIP to JDK target directory - ZIP contains bin/, lib/ directly (no parent folder)
             // This creates: .mythx/java-11-windows-64/bin/java.exe
+            String targetDir = getJdkDir();
+            new File(targetDir).mkdirs();
             window.setStatus("Extracting Java 11...");
-            LOGGER.info("Extracting JDK to: {}", SETTINGS_DIR);
-            extractZip(zipPath, SETTINGS_DIR);
+            LOGGER.info("Extracting JDK to: {}", targetDir);
+            extractZip(zipPath, targetDir);
 
             // Verify extraction succeeded
             String expectedJavaPath = getJavaExecutable();
