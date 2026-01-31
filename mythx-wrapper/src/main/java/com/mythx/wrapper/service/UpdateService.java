@@ -119,6 +119,10 @@ public class UpdateService {
         Version localVersion = Config.get().getLocalVersion();
         Version remoteVersion = Config.get().getRemoteVersion();
 
+        log.info("=== Update Check ===");
+        log.info("Local version: {}", localVersion);
+        log.info("Remote version: {}", remoteVersion);
+
         // Handle case where remote version couldn't be fetched (network issues)
         if (remoteVersion == null) {
             if (localVersion != null && hasCachedLauncher(localVersion)) {
@@ -130,19 +134,23 @@ public class UpdateService {
         }
 
         if (localVersion == null) {
-            log.info("Local version is missing. Start download jar");
-            log.info(remoteVersion.getUrl());
-            log.info(remoteVersion.getFilename());
+            log.info("Local version is missing. Starting fresh download...");
+            log.info("Download URL: {}", remoteVersion.getUrl());
+            log.info("Filename: {}", remoteVersion.getFilename());
             downloadJar(remoteVersion.getUrl(), remoteVersion.getFilename());
         } else {
             int locVersion = Integer.parseInt(localVersion.getVersion());
             int remVersion = Integer.parseInt(remoteVersion.getVersion());
 
+            log.info("Version comparison: local={} vs remote={}", locVersion, remVersion);
+
             if (locVersion < remVersion) {
-                log.info("Need update jar");
+                log.info("Update available! Downloading new version...");
+                log.info("Download URL: {}", remoteVersion.getUrl());
+                log.info("Filename: {}", remoteVersion.getFilename());
                 downloadJar(remoteVersion.getUrl(), remoteVersion.getFilename());
             } else {
-                log.info("Version of jar is up to date");
+                log.info("Launcher is up to date (version {})", locVersion);
             }
         }
     }
@@ -162,18 +170,24 @@ public class UpdateService {
     public void downloadJar(String fileURL, String fileName) {
         String savePath = LAUNCHER_DIR + fileName + ".jar"; // Save launcher to launcher directory
 
-
+        log.info("Starting download - URL: {}", fileURL);
+        log.info("Save path: {}", savePath);
 
         CloseableHttpClient client = HttpClientConfig.getHttpClient();
-        String cacheBustedUrl = fileURL + "?t=" + System.currentTimeMillis();
+        // Fix: Use & if URL already has query params, otherwise use ?
+        String separator = fileURL.contains("?") ? "&" : "?";
+        String cacheBustedUrl = fileURL + separator + "t=" + System.currentTimeMillis();
+        log.info("Cache-busted URL: {}", cacheBustedUrl);
         HttpGet request = new HttpGet(cacheBustedUrl);
 
         try (CloseableHttpResponse response = client.execute(request)) {
             int statusCode = response.getStatusLine().getStatusCode();
+            log.info("Download response status: {}", statusCode);
             if (statusCode == 200) {
                 HttpEntity entity = response.getEntity();
                 if (entity != null) {
                     long contentLength = entity.getContentLength(); // Get the total size of the file
+                    log.info("Content length: {} bytes", contentLength);
                     try (InputStream inputStream = entity.getContent()) {
                         Path outputPath = Paths.get(savePath);
                         Files.createDirectories(outputPath.getParent()); // Ensure parent directories exist
@@ -193,20 +207,32 @@ public class UpdateService {
                                 }
 
                             }
+                            log.info("Total bytes written: {}", totalBytesRead);
                         }
-                        log.info("Download completed: " + savePath);
+                        
+                        // Verify file was actually written
+                        File downloadedFile = new File(savePath);
+                        if (downloadedFile.exists()) {
+                            log.info("Download completed and verified: {} ({} bytes)", savePath, downloadedFile.length());
+                        } else {
+                            log.error("Download appeared to complete but file does not exist: {}", savePath);
+                            return; // Don't update version if file doesn't exist
+                        }
+                        
                         if(isOldJarExist()){
                             deleteOldJar();
                         }
                         saveVersion();
 
                     }
+                } else {
+                    log.error("Response entity is null - no content received");
                 }
             } else {
-                log.warn("Failed to download file: " + response.getStatusLine());
+                log.warn("Failed to download file: {} - Response: {}", fileURL, response.getStatusLine());
             }
         } catch (IOException e) {
-            log.warn("Error while downloading file: " + e.getMessage());
+            log.error("Error while downloading file from {}: {}", fileURL, e.getMessage(), e);
             ErrorController.sendErrorAsync("unknown", e);
         }
     }
