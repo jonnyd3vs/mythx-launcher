@@ -210,10 +210,15 @@ public class JdkDownloader {
     private void downloadAndExtractJdk(JdkDownloadWindow window) throws IOException {
         String downloadUrl = getJdkDownloadUrl();
         String zipPath = SETTINGS_DIR + getJdkZipName();
+        
+        // Target directory for extraction - ZIP contains bin/, lib/ at root (no parent folder)
+        // So we must extract to .mythx/java-11-windows-64/ to get .mythx/java-11-windows-64/bin/java.exe
+        String targetDir = getJdkDir();
 
-        // Ensure settings dir exists for ZIP download
-        // ZIP contains java-11-windows-64/ folder already, so we extract to SETTINGS_DIR
+        // Ensure directories exist
         new File(SETTINGS_DIR).mkdirs();
+        new File(targetDir).mkdirs();
+        LOGGER.info("Target JDK directory: {}", targetDir);
 
         // Download ZIP with cache-busting using Apache HttpClient (more reliable than HttpURLConnection)
         String cacheBustedUrl = downloadUrl + "?t=" + System.currentTimeMillis();
@@ -264,26 +269,38 @@ public class JdkDownloader {
             }
             LOGGER.info("ZIP file size: {} bytes", zipFile.length());
 
-            // Extract ZIP to SETTINGS_DIR (ZIP contains java-11-windows-64/ folder already)
+            // Extract ZIP to targetDir (java-11-windows-64/) - ZIP has bin/, lib/ at root
             window.setStatus("Extracting Java 11...");
-            LOGGER.info("Extracting JDK to: {}", SETTINGS_DIR);
-            extractZip(zipPath, SETTINGS_DIR);
+            LOGGER.info("Extracting JDK to: {}", targetDir);
+            extractZip(zipPath, targetDir);
 
             // Verify extraction succeeded
-            File javaExe = new File(getJavaExecutable());
+            String expectedJavaPath = getJavaExecutable();
+            File javaExe = new File(expectedJavaPath);
             LOGGER.info("Checking for java executable at: {}", javaExe.getAbsolutePath());
+            
             if (!javaExe.exists()) {
-                LOGGER.error("Extraction failed - java executable not found!");
+                LOGGER.error("Extraction failed - java executable not found at expected location!");
                 // List what was extracted for debugging
-                File[] extracted = new File(targetDir).listFiles();
-                if (extracted != null) {
+                File targetDirFile = new File(targetDir);
+                File[] extracted = targetDirFile.listFiles();
+                if (extracted != null && extracted.length > 0) {
                     LOGGER.error("Contents of {}: ", targetDir);
                     for (File f : extracted) {
-                        LOGGER.error("  - {}", f.getName());
+                        LOGGER.error("  - {} (dir={})", f.getName(), f.isDirectory());
                     }
+                } else {
+                    LOGGER.error("Target directory is empty or doesn't exist: {}", targetDir);
+                }
+                // Also check if maybe it extracted to wrong location
+                File wrongLocation = new File(SETTINGS_DIR + "bin" + File.separator + "java.exe");
+                if (wrongLocation.exists()) {
+                    LOGGER.error("Found java.exe at WRONG location: {}", wrongLocation.getAbsolutePath());
                 }
                 throw new IOException("Extraction failed - java.exe not found at: " + javaExe.getAbsolutePath());
             }
+            
+            LOGGER.info("SUCCESS: java.exe verified at {}", javaExe.getAbsolutePath());
 
             // Delete ZIP after successful extraction
             if (zipFile.delete()) {
