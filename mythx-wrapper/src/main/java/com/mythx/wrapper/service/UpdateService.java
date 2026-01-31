@@ -5,7 +5,7 @@ import com.google.gson.reflect.TypeToken;
 import com.mythx.wrapper.Launch;
 import com.mythx.wrapper.config.Config;
 import com.mythx.wrapper.config.HttpClientConfig;
-
+import com.mythx.wrapper.controller.ErrorController;
 import com.mythx.wrapper.model.LauncherDataResponse;
 import com.mythx.wrapper.model.Version;
 import lombok.extern.slf4j.Slf4j;
@@ -91,6 +91,7 @@ public class UpdateService {
                 Config.get().setLocalVersion(gson.fromJson(reader, type));
             } catch (IOException e) {
                 log.warn(e.getMessage(), e);
+                ErrorController.sendErrorAsync("unknown", e);
             }
         }
     }
@@ -109,6 +110,7 @@ public class UpdateService {
             log.info("Remote version loaded: {}", dataResponse.getData());
         } catch (IOException e) {
             log.warn("Error retrieving data from API", e);
+            ErrorController.sendErrorAsync("unknown", e);
         }
     }
 
@@ -205,6 +207,7 @@ public class UpdateService {
             }
         } catch (IOException e) {
             log.warn("Error while downloading file: " + e.getMessage());
+            ErrorController.sendErrorAsync("unknown", e);
         }
     }
 
@@ -254,6 +257,7 @@ public class UpdateService {
             gson.toJson(Config.get().getLocalVersion(), writer);
         } catch (IOException e) {
             log.warn(e.getMessage(), e);
+            ErrorController.sendErrorAsync("unknown", e);
         }
     }
 }
