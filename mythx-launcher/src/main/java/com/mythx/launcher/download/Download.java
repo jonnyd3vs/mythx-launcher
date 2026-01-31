@@ -105,10 +105,28 @@ public class Download implements Runnable {
             // Create parent directories if they don't exist
             File outputFile = new File(LauncherSettings.SAVE_DIR + serverName);
             if (outputFile.getParentFile() != null) {
-                outputFile.getParentFile().mkdirs();
+                boolean created = outputFile.getParentFile().mkdirs();
+                LOGGER.info("Created directories: {} for path: {}", created, outputFile.getParentFile().getAbsolutePath());
             }
+            
+            // Delete existing file if it exists (might be locked by previous process)
+            if (outputFile.exists()) {
+                boolean deleted = outputFile.delete();
+                LOGGER.info("Deleted existing file: {} (success: {})", outputFile.getAbsolutePath(), deleted);
+                if (!deleted) {
+                    LOGGER.warn("Could not delete existing file - may be locked by another process");
+                    // Try garbage collection to release any file handles
+                    System.gc();
+                    Thread.sleep(100);
+                    deleted = outputFile.delete();
+                    LOGGER.info("Retry delete after GC: {}", deleted);
+                }
+            }
+            
+            // Log the full path we're about to write to
+            LOGGER.info("Opening file for writing: {}", outputFile.getAbsolutePath());
 
-            file = new RandomAccessFile(LauncherSettings.SAVE_DIR + serverName, "rw");
+            file = new RandomAccessFile(LauncherSettings.SAVE_DIR + serverName, "rw")
             file.seek(downloaded);
 
             stream = connection.getInputStream();
@@ -210,8 +228,17 @@ public class Download implements Runnable {
                 LOGGER.info("Launching client after download...");
                 Utilities.launchClient(serverName);
             }
+        } catch (java.io.FileNotFoundException e) {
+            LOGGER.error("File access denied - path: {}, error: {}", LauncherSettings.SAVE_DIR + serverName, e.getMessage());
+            LOGGER.error("This is likely a permissions issue or antivirus blocking. Check if {} is writable.", LauncherSettings.SAVE_DIR);
+            downloadState = DownloadState.ERROR;
+            e.printStackTrace();
+        } catch (java.security.AccessControlException e) {
+            LOGGER.error("Security/permissions denied writing to: {}", LauncherSettings.SAVE_DIR + serverName);
+            downloadState = DownloadState.ERROR;
+            e.printStackTrace();
         } catch (Exception e) {
-            LOGGER.error("Download failed with exception", e);
+            LOGGER.error("Download failed with exception: {} - {}", e.getClass().getSimpleName(), e.getMessage());
             downloadState = DownloadState.ERROR;
             e.printStackTrace();
         } finally {
