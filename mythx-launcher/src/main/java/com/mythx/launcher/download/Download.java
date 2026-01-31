@@ -102,6 +102,12 @@ public class Download implements Runnable {
               //  stateChanged();
             }
 
+            // Create parent directories if they don't exist
+            File outputFile = new File(LauncherSettings.SAVE_DIR + serverName);
+            if (outputFile.getParentFile() != null) {
+                outputFile.getParentFile().mkdirs();
+            }
+
             file = new RandomAccessFile(LauncherSettings.SAVE_DIR + serverName, "rw");
             file.seek(downloaded);
 
