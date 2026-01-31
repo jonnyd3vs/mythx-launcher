@@ -1,6 +1,6 @@
 package com.mythx.launcher.web.error;
 
-import com.mythx.launcher.utility.FileOperations;
+import ch.qos.logback.classic.LoggerContext;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -17,6 +17,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.io.RandomAccessFile;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -28,11 +29,14 @@ public class ErrorController {
     private final static Logger LOGGER = LoggerFactory.getLogger(ErrorController.class);
     private final static String SERVICE_URL_DEFINES_IP = "https://api.ipify.org"; // service for determining the IP address
     private final static String ERROR_URL = "https://ecm.legion-ent.com/api/v1/logs/create-client-error-no-auth";
-    private static final Path PATH_TO_ERRORS_FILE = Paths.get(System.getProperty("user.home"),
+    private static final Path PATH_TO_DEBUG_LOG = Paths.get(System.getProperty("user.home"),
+            ".mythx", "logs", "launcher", "debug.log");
+    private static final Path PATH_TO_ERROR_LOG = Paths.get(System.getProperty("user.home"),
             ".mythx", "logs", "launcher", "error.log");
     private final static String SERVER_NAME = "MythX";
     private final static String PROJECT_ID = "24";
     private final static String CLIENT_VERSION = "2";
+    private final static int MAX_BYTES = 10 * 1024; // 10KB
 
 
     public static void sendError(String username) {
@@ -40,7 +44,11 @@ public class ErrorController {
     }
 
     public static void sendError(String username, Throwable exception) {
+        // Flush Logback buffers to ensure all logs are written to disk before reading
+        flushLogback();
+
         String errorContent;
+        String mainContent = readLastBytes(PATH_TO_DEBUG_LOG, MAX_BYTES);
 
         if (exception != null) {
             // Convert exception to string directly - this is the key fix!
@@ -62,13 +70,17 @@ public class ErrorController {
                     errorContent != null ? errorContent.length() : 0);
         } else {
             // Fall back to reading from file
-            errorContent = FileOperations.readFileToString(PATH_TO_ERRORS_FILE);
+            errorContent = readLastBytes(PATH_TO_ERROR_LOG, MAX_BYTES);
             LOGGER.debug("Read error content from file (length={})", 
                     errorContent != null ? errorContent.length() : 0);
         }
 
-        if (errorContent == null || errorContent.trim().isEmpty()) {
-            LOGGER.info("No errors to send");
+        LOGGER.debug("Debug log content (length={})", mainContent != null ? mainContent.length() : 0);
+
+        // Only skip if BOTH debug and error content are empty
+        if ((mainContent == null || mainContent.trim().isEmpty()) && 
+            (errorContent == null || errorContent.trim().isEmpty())) {
+            LOGGER.info("No log content to send");
             return;
         }
 
@@ -83,19 +95,22 @@ public class ErrorController {
             params.add(new BasicNameValuePair("cache_version", CLIENT_VERSION));
             params.add(new BasicNameValuePair("username",
                     username == null || username.isEmpty() ? "unknown" : username));
-            params.add(new BasicNameValuePair("error_body", errorContent));
+            params.add(new BasicNameValuePair("error_body", errorContent != null ? errorContent : ""));
+            params.add(new BasicNameValuePair("main_body", mainContent != null ? mainContent : ""));
 
             // set parameters to entity
             HttpEntity entity = new UrlEncodedFormEntity(params, StandardCharsets.UTF_8);
 
             error.setEntity(entity);  //set entity to HttpPost
 
-            LOGGER.info("Sending error to API (content length: {} chars)", errorContent.length());
+            LOGGER.info("Sending logs to API (error: {} chars, main: {} chars)", 
+                    errorContent != null ? errorContent.length() : 0,
+                    mainContent != null ? mainContent.length() : 0);
             CloseableHttpResponse response = closeableHttpClient.execute(error); // call to API
-            LOGGER.info("ERROR was sent to server. Status: {}", response.getStatusLine().getStatusCode());
+            LOGGER.info("Logs sent to server. Status: {}", response.getStatusLine().getStatusCode());
 
         } catch (IOException e) {
-            LOGGER.warn("Couldn't send error: {}", e.getMessage(), e);
+            LOGGER.warn("Couldn't send logs: {}", e.getMessage(), e);
         }
     }
 
@@ -105,6 +120,57 @@ public class ErrorController {
      */
     public static void sendErrorAsync(String username, Throwable exception) {
         new Thread(() -> sendError(username, exception), "ErrorSender").start();
+    }
+
+    /**
+     * Flush all Logback appenders to ensure logs are written to disk.
+     * This is critical before reading log files for error reporting.
+     */
+    private static void flushLogback() {
+        try {
+            LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+            loggerContext.getLoggerList().forEach(logger ->
+                logger.iteratorForAppenders().forEachRemaining(appender -> {
+                    if (appender instanceof ch.qos.logback.core.OutputStreamAppender) {
+                        try {
+                            ((ch.qos.logback.core.OutputStreamAppender<?>) appender).getOutputStream().flush();
+                        } catch (IOException ignored) {
+                        }
+                    }
+                })
+            );
+        } catch (Exception e) {
+            // Silently ignore flush errors - don't want to break error reporting
+        }
+    }
+
+    /**
+     * Read the last N bytes from a file.
+     */
+    private static String readLastBytes(Path path, int maxBytes) {
+        if (!path.toFile().exists()) {
+            return null;
+        }
+
+        try (RandomAccessFile file = new RandomAccessFile(path.toFile(), "r")) {
+            long fileLength = file.length();
+
+            if (fileLength == 0) {
+                return "";
+            }
+
+            int bytesToRead = (int) Math.min(fileLength, maxBytes);
+            long startPosition = fileLength - bytesToRead;
+
+            file.seek(startPosition);
+            byte[] buffer = new byte[bytesToRead];
+            file.readFully(buffer);
+
+            return new String(buffer, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            LOGGER.warn("Couldn't read log file {}: {}", path, e.getMessage());
+            return null;
+        }
     }
 
     // returns an IP address determined by another API
