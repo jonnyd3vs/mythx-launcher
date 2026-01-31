@@ -40,13 +40,13 @@ jobs:
 
       - name: Upload wrapper to GCS
         run: |
-          gcloud storage cp ./mythx-wrapper/mythx-wrapper.jar gs://${{ env.GCS_BUCKET }}/mythx_wrapper.jar
+          gcloud storage cp ./mythx-wrapper/mythx-wrapper.jar gs://${{ env.GCS_BUCKET }}/MythX.jar
 
       - name: Make file public
         run: |
-          gcloud storage objects update gs://${{ env.GCS_BUCKET }}/mythx_wrapper.jar --add-acl-grant=entity=allUsers,role=READER
+          gcloud storage objects update gs://${{ env.GCS_BUCKET }}/MythX.jar --add-acl-grant=entity=allUsers,role=READER
 
       - name: Deployment summary
         run: |
           echo "=== Deployment Complete ==="
-          echo "Wrapper URL: https://storage.googleapis.com/${{ env.GCS_BUCKET }}/mythx_wrapper.jar"
+          echo "Wrapper URL: https://storage.googleapis.com/${{ env.GCS_BUCKET }}/MythX.jar"
