@@ -4,6 +4,7 @@ import com.mythx.launcher.Launch;
 import com.mythx.launcher.LauncherSettings;
 import com.mythx.launcher.components.CreativeComponent;
 import com.mythx.launcher.config.Config;
+import com.mythx.launcher.download.Download;
 import com.mythx.launcher.dto.ClientVersion;
 import com.mythx.launcher.jdk.JdkDownloader;
 import com.mythx.launcher.service.ClientVersionService;
@@ -118,17 +119,22 @@ public class PlayNowButton extends CreativeComponent {
                 localVersion < remoteVersion;
 
         if (needsDownload) {
-            LOGGER.info("Downloading new client version");
+            LOGGER.info("Downloading new client version (file exists: {}, local version: {}, remote version: {})", 
+                    clientFile.exists(), localVersion, remoteVersion);
             final int versionToSave = remoteVersion;
+            final String finalServerName = serverName;
 
-            // Start download - the download will call launchClient when complete
-            Launch.resetDownload(clientUrl, clientFilename).start();
-
-            // Save version after download starts (will be available when download completes)
-            Config.get().getClientVersions().put(serverName, versionToSave);
-            ClientVersionService.saveVersion();
+            // Start download - version is saved AFTER successful download, not before
+            Download download = Launch.resetDownload(clientUrl, clientFilename);
+            download.setOnComplete(() -> {
+                // Save version only after successful download
+                Config.get().getClientVersions().put(finalServerName, versionToSave);
+                ClientVersionService.saveVersion();
+                LOGGER.info("Download complete, saved version {} for {}", versionToSave, finalServerName);
+            });
+            download.start();
         } else {
-            LOGGER.info("Client is up to date, launching existing");
+            LOGGER.info("Client is up to date, launching existing (file: {})", clientFile.getAbsolutePath());
             Utilities.launchClient(clientFilename);
         }
     }

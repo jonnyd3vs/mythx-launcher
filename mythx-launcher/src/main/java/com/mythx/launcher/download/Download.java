@@ -15,6 +15,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 
 public class Download implements Runnable {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(Download.class);
 
     Stopwatch SPEED_TIMER;
 
@@ -34,15 +35,18 @@ public class Download implements Runnable {
 
     private boolean paused;
     private boolean stopped;
+    
+    private Runnable onComplete;
 
     @Override
     public void run() {
+        LOGGER.info("Starting download: {} -> {}", url, LauncherSettings.SAVE_DIR + serverName);
 
        File original = new File(LauncherSettings.SAVE_DIR + serverName);
 
        if(original != null && original.exists()) {
            original.delete();
-           System.out.println("Delete..");
+           LOGGER.info("Deleted existing file: {}", original.getAbsolutePath());
        }
 
         SPEED_TIMER = new Stopwatch();
@@ -58,28 +62,39 @@ public class Download implements Runnable {
         try {
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestProperty("Range", "bytes=" + downloaded + "-");
+            connection.setConnectTimeout(30000);
+            connection.setReadTimeout(30000);
             connection.connect();
 
-            if (connection.getResponseCode() / 100 != 2) {
-               // error();
+            int responseCode = connection.getResponseCode();
+            LOGGER.info("Download response code: {}", responseCode);
+            
+            if (responseCode / 100 != 2) {
+                LOGGER.error("Download failed with response code: {}", responseCode);
+                downloadState = DownloadState.ERROR;
+                return;
             }
 
             int contentLength = connection.getContentLength();
+            LOGGER.info("Content-Length header: {}", contentLength);
 
             // Fallback for GCS which may not return Content-Length directly
             if (contentLength < 1) {
                 String gcsLength = connection.getHeaderField("x-goog-stored-content-length");
+                LOGGER.info("GCS x-goog-stored-content-length header: {}", gcsLength);
                 if (gcsLength != null) {
                     try {
                         contentLength = Integer.parseInt(gcsLength);
                     } catch (NumberFormatException e) {
-                        // Ignore parse errors
+                        LOGGER.warn("Failed to parse GCS content length: {}", gcsLength);
                     }
                 }
             }
 
             if (contentLength < 1) {
-               // error();
+                LOGGER.error("Could not determine content length, aborting download");
+                downloadState = DownloadState.ERROR;
+                return;
             }
 
             if (size == -1) {
@@ -166,11 +181,33 @@ public class Download implements Runnable {
 
             if (downloadState == DownloadState.DOWNLOADING) {
                 downloadState = DownloadState.COMPLETE;
+                LOGGER.info("Download complete, file saved to: {}", LauncherSettings.SAVE_DIR + serverName);
+                
+                // Verify the file was written
+                File downloadedFile = new File(LauncherSettings.SAVE_DIR + serverName);
+                if (!downloadedFile.exists()) {
+                    LOGGER.error("Download complete but file does not exist: {}", downloadedFile.getAbsolutePath());
+                    return;
+                }
+                LOGGER.info("Downloaded file size: {} bytes", downloadedFile.length());
+                
+                // Call completion callback (saves version)
+                if (onComplete != null) {
+                    try {
+                        onComplete.run();
+                    } catch (Exception e) {
+                        LOGGER.error("Error in download completion callback", e);
+                    }
+                }
+                
+                // Now launch the client
+                LOGGER.info("Launching client after download...");
                 Utilities.launchClient(serverName);
             }
         } catch (Exception e) {
+            LOGGER.error("Download failed with exception", e);
+            downloadState = DownloadState.ERROR;
             e.printStackTrace();
-            //error();
         } finally {
             if (file != null)
                 try { file.close(); } catch (Exception e) {e.printStackTrace(); }
@@ -218,5 +255,9 @@ public class Download implements Runnable {
 
     public void setStopped(boolean stopped) {
         this.stopped = stopped;
+    }
+
+    public void setOnComplete(Runnable onComplete) {
+        this.onComplete = onComplete;
     }
 }

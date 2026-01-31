@@ -98,8 +98,20 @@ public class Utilities {
 
     public static void launchClient(String serverName) {
         try {
+            // Verify the JAR file exists before attempting to launch
+            File jarFile = new File(LauncherSettings.SAVE_DIR + serverName);
+            if (!jarFile.exists()) {
+                LOGGER.error("Cannot launch client - JAR file does not exist: {}", jarFile.getAbsolutePath());
+                return;
+            }
+            LOGGER.info("JAR file exists: {} ({} bytes)", jarFile.getAbsolutePath(), jarFile.length());
+
             // Get JDK path (uses cached path or downloads if needed)
             String javaPath = ensureJdk11AndGetPath();
+            if (javaPath == null || javaPath.isEmpty()) {
+                LOGGER.error("Cannot launch client - Java path is null or empty");
+                return;
+            }
             LOGGER.info("Launching client with Java: {}", javaPath);
 
             String[] command = new String[]{
@@ -107,14 +119,42 @@ public class Utilities {
                 "-Xms512m",
                 "-Xmx1024m",
                 "-jar",
-                LauncherSettings.SAVE_DIR + serverName,
+                jarFile.getAbsolutePath(),
                 String.valueOf(LauncherSettings.BETA_MODE)
             };
 
             LOGGER.info("Launch command: {} -Xms512m -Xmx1024m -jar {} {}",
-                    javaPath, LauncherSettings.SAVE_DIR + serverName, LauncherSettings.BETA_MODE);
+                    javaPath, jarFile.getAbsolutePath(), LauncherSettings.BETA_MODE);
 
-            Process p = Runtime.getRuntime().exec(command);
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.directory(new File(LauncherSettings.SAVE_DIR));
+            pb.redirectErrorStream(true);
+            
+            Process p = pb.start();
+            LOGGER.info("Client process started successfully (PID available: {})", p.isAlive());
+            
+            // Give the process a moment to fail if it's going to fail immediately
+            Thread.sleep(500);
+            if (!p.isAlive()) {
+                int exitCode = p.exitValue();
+                LOGGER.error("Client process exited immediately with code: {}", exitCode);
+                
+                // Try to read any error output
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(p.getInputStream()))) {
+                    String line;
+                    StringBuilder output = new StringBuilder();
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append("\n");
+                    }
+                    if (output.length() > 0) {
+                        LOGGER.error("Client output: {}", output.toString());
+                    }
+                }
+            } else {
+                LOGGER.info("Client is running successfully");
+            }
+            
             LauncherComponent.LOADING_BAR.getComponent().load(0);
             Launch.download = null;
         } catch (Exception e) {
