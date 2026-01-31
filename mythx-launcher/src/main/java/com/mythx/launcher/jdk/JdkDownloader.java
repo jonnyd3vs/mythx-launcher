@@ -397,15 +397,10 @@ public class JdkDownloader {
 
     /**
      * Get the current architecture identifier
+     * Always returns 64-bit - we only provide 64-bit JDK
      */
     private String getArch() {
-        String arch = System.getProperty("os.arch").toLowerCase();
-        if (arch.contains("aarch64") || arch.contains("arm64")) {
-            return "arm64";
-        } else if (arch.contains("64")) {
-            return "64";
-        } else {
-            return "32";
-        }
+        // Always use 64-bit JDK - modern CPUs all support it
+        return "64";
     }
 }
