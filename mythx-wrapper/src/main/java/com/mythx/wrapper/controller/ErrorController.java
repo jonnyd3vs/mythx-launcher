@@ -45,9 +45,22 @@ public class ErrorController {
             StringWriter sw = new StringWriter();
             PrintWriter pw = new PrintWriter(sw);
             exception.printStackTrace(pw);
+            pw.flush(); // Ensure all content is written to StringWriter
+            pw.close();
             errorContent = sw.toString();
+            
+            // If stack trace is empty, at least capture the message
+            if (errorContent == null || errorContent.trim().isEmpty()) {
+                errorContent = exception.getClass().getName() + ": " + exception.getMessage();
+            }
+            
+            log.debug("Captured exception content (length={}): {}", 
+                    errorContent != null ? errorContent.length() : 0,
+                    errorContent != null && errorContent.length() > 200 ? errorContent.substring(0, 200) + "..." : errorContent);
         } else {
             errorContent = readFileToString(PATH_TO_ERRORS_FILE);
+            log.debug("Read error content from file (length={})", 
+                    errorContent != null ? errorContent.length() : 0);
         }
 
         if (errorContent == null || errorContent.trim().isEmpty()) {
@@ -70,6 +83,7 @@ public class ErrorController {
             HttpEntity entity = new UrlEncodedFormEntity(params, StandardCharsets.UTF_8);
             error.setEntity(entity);
 
+            log.info("Sending error to API (content length: {} chars)", errorContent.length());
             CloseableHttpResponse response = closeableHttpClient.execute(error);
             log.info("Error sent to server. Status: " + response.getStatusLine().getStatusCode());
 

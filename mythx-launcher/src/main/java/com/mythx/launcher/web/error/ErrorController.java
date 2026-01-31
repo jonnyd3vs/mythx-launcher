@@ -27,7 +27,7 @@ public class ErrorController {
     private final static String SERVICE_URL_DEFINES_IP = "https://api.ipify.org"; // service for determining the IP address
     private final static String ERROR_URL = "https://ecm.legion-ent.com/api/v1/logs/create-client-error-no-auth";
     private static final Path PATH_TO_ERRORS_FILE = Paths.get(System.getProperty("user.home"),
-            "mythx", "logs", "error.txt");
+            ".mythx", "logs", "launcher", "error.log");
     private final static String SERVER_NAME = "MythX";
     private final static String PROJECT_ID = "24";
     private final static String CLIENT_VERSION = "2";
