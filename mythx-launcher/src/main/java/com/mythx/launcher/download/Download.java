@@ -8,8 +8,8 @@ import com.mythx.launcher.utility.Stopwatch;
 import com.mythx.launcher.utility.Utilities;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -56,12 +56,12 @@ public class Download implements Runnable {
 
         downloadState = DownloadState.DOWNLOADING;
 
-        RandomAccessFile file = null;
+        FileOutputStream file = null;
         InputStream stream = null;
 
         try {
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestProperty("Range", "bytes=" + downloaded + "-");
+            // Always request full file - no resume/Range header
             connection.setConnectTimeout(30000);
             connection.setReadTimeout(30000);
             connection.connect();
@@ -126,8 +126,8 @@ public class Download implements Runnable {
             // Log the full path we're about to write to
             LOGGER.info("Opening file for writing: {}", outputFile.getAbsolutePath());
 
-            file = new RandomAccessFile(LauncherSettings.SAVE_DIR + serverName, "rw")
-            file.seek(downloaded);
+            // Always write fresh file from beginning (no resume)
+            file = new FileOutputStream(LauncherSettings.SAVE_DIR + serverName);
 
             stream = connection.getInputStream();
 
