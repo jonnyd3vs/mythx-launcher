@@ -1,6 +1,8 @@
 package com.mythx.launcher.web.error;
 
 import ch.qos.logback.classic.LoggerContext;
+import com.mythx.launcher.LauncherSettings;
+import com.mythx.launcher.config.Config;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -35,8 +37,24 @@ public class ErrorController {
             ".mythx", "logs", "launcher", "error.log");
     private final static String SERVER_NAME = "MythX";
     private final static String PROJECT_ID = "24";
-    private final static String CLIENT_VERSION = "2";
     private final static int MAX_BYTES = 10 * 1024; // 10KB
+    
+    /**
+     * Get the current client version dynamically from Config.
+     * Returns the downloaded client version, or "unknown" if not available.
+     */
+    private static String getClientVersion() {
+        try {
+            String serverName = LauncherSettings.getServerName();
+            Integer version = Config.get().getClientVersions().get(serverName);
+            if (version != null) {
+                return String.valueOf(version);
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to get client version from Config: {}", e.getMessage());
+        }
+        return "unknown";
+    }
 
 
     public static void sendError(String username) {
@@ -98,7 +116,7 @@ public class ErrorController {
             params.add(new BasicNameValuePair("project_id", PROJECT_ID));
             params.add(new BasicNameValuePair("ip_address", getIpAddress())); // maybe will be useful data
             params.add(new BasicNameValuePair("server-name", SERVER_NAME));
-            params.add(new BasicNameValuePair("cache_version", CLIENT_VERSION));
+            params.add(new BasicNameValuePair("cache_version", getClientVersion()));
             params.add(new BasicNameValuePair("username",
                     username == null || username.isEmpty() ? "unknown" : username));
             params.add(new BasicNameValuePair("error_body", errorContent != null ? errorContent : ""));
