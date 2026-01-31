@@ -21,6 +21,9 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Play Now button that handles JDK verification and client version checking
@@ -29,6 +32,15 @@ import java.net.URL;
 public class PlayNowButton extends CreativeComponent {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlayNowButton.class);
     private String serverName;
+
+    // Background pre-fetching of client version to reduce Play Now wait time
+    private static volatile Integer cachedRemoteVersion = null;
+    private static volatile boolean versionFetchInProgress = false;
+    private static volatile boolean versionFetchComplete = false;
+    private static volatile boolean launchPending = false;
+
+    // Periodic version refresh scheduler (refreshes every 15 seconds)
+    private static ScheduledExecutorService versionRefreshScheduler = null;
 
     public PlayNowButton() {
         serverName = "MythX";
@@ -107,8 +119,36 @@ public class PlayNowButton extends CreativeComponent {
         ClientVersionService.loadLocalVersions();
         LOGGER.info("Reloaded local versions from file");
 
-        // Fetch remote version from ECM API
-        Integer remoteVersion = fetchRemoteVersion();
+        // Check if we have cached version data available from background fetch
+        Integer remoteVersion;
+        if (cachedRemoteVersion != null) {
+            if (versionFetchComplete) {
+                LOGGER.info("*** FAST PATH - Using pre-fetched version data ***");
+                LOGGER.info("Saved API request time by using background cache");
+            } else {
+                LOGGER.info("*** FAST PATH - Using old cached version (refresh in progress) ***");
+                LOGGER.info("Refresh is happening in background, using previous version data");
+            }
+            remoteVersion = cachedRemoteVersion;
+        } else if (versionFetchInProgress) {
+            // If version fetch is still in progress AND we have NO cached data, queue this launch
+            LOGGER.info("*** PENDING LAUNCH - First version fetch still in progress, no cached data available ***");
+            LOGGER.info("Queuing launch to execute automatically when background fetch completes");
+            launchPending = true;
+            return;
+        } else {
+            // Fallback: No cached data available, fetch inline
+            LOGGER.info("No cached version data available - fetching inline");
+            remoteVersion = fetchRemoteVersion();
+        }
+
+        executeLaunchWithVersion(remoteVersion, clientUrl, serverName, clientFilename);
+    }
+
+    /**
+     * Execute the launch with a given version (either cached or freshly fetched)
+     */
+    private void executeLaunchWithVersion(Integer remoteVersion, String clientUrl, String serverName, String clientFilename) {
         if (remoteVersion == null) {
             LOGGER.warn("Failed to fetch remote version, checking if client exists");
             // If we can't get remote version, just try to launch existing client
@@ -226,5 +266,165 @@ public class PlayNowButton extends CreativeComponent {
 
     public void setServerName(String serverName) {
         this.serverName = serverName;
+    }
+
+    /**
+     * Starts background pre-fetching of client version to reduce wait time when Play Now is clicked.
+     * Should be called during launcher initialization.
+     */
+    public static void startBackgroundVersionFetch() {
+        // Allow re-entry for periodic refreshes
+        if (versionFetchInProgress) {
+            LOGGER.debug("Version fetch already in progress, skipping");
+            return;
+        }
+
+        versionFetchInProgress = true;
+        versionFetchComplete = false; // Reset to indicate fresh fetch
+        LOGGER.info("=== STARTING BACKGROUND VERSION FETCH ===");
+        LOGGER.info("Pre-fetching client version data to optimize Play Now response time");
+
+        new Thread(() -> {
+            try {
+                String versionUrl = Config.get().getClientVersionUrl() + "?projectId=" + Config.get().getProjectId();
+                LOGGER.info("Background fetch - connecting to: {}", versionUrl);
+
+                long startTime = System.currentTimeMillis();
+
+                URL url = new URL(versionUrl);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("User-Agent", "MythX-Launcher");
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+
+                int responseCode = conn.getResponseCode();
+                if (responseCode == 200) {
+                    StringBuilder response = new StringBuilder();
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            response.append(line);
+                        }
+                    }
+
+                    // Parse version from JSON response
+                    String json = response.toString();
+                    Integer version = parseVersionFromJsonStatic(json);
+                    if (version != null) {
+                        cachedRemoteVersion = version;
+                        long duration = System.currentTimeMillis() - startTime;
+                        LOGGER.info("Background fetch complete in {}ms - Remote version: {}", duration, cachedRemoteVersion);
+                        versionFetchComplete = true;
+
+                        // If user clicked Play Now while we were fetching, execute the pending launch
+                        if (launchPending) {
+                            LOGGER.info("=== EXECUTING PENDING LAUNCH ===");
+                            LOGGER.info("User clicked Play Now during background fetch - executing now");
+                            launchPending = false;
+
+                            // Execute the launch on the Swing EDT
+                            SwingUtilities.invokeLater(() -> {
+                                String clientUrl = LauncherSettings.getClientDownloadUrl();
+                                String serverName = LauncherSettings.getServerName();
+                                String clientFilename = LauncherSettings.getClientFilename();
+                                new PlayNowButton().executeLaunchWithVersion(cachedRemoteVersion, clientUrl, serverName, clientFilename);
+                            });
+                        }
+                    } else {
+                        LOGGER.warn("Background fetch - failed to parse version from response");
+                        versionFetchComplete = true;
+                    }
+                } else {
+                    LOGGER.warn("Background fetch failed with response code: {}", responseCode);
+                    versionFetchComplete = true;
+                }
+            } catch (Exception e) {
+                LOGGER.error("Background version fetch failed", e);
+                versionFetchComplete = true; // Mark as complete even on error so launch can proceed
+            } finally {
+                versionFetchInProgress = false;
+                LOGGER.info("Background version fetch thread completed");
+            }
+        }, "VersionPreFetchThread").start();
+    }
+
+    /**
+     * Parse version from JSON (static version for background thread)
+     */
+    private static Integer parseVersionFromJsonStatic(String json) {
+        try {
+            String searchKey = "\"value\"";
+            int keyIndex = json.indexOf(searchKey);
+            if (keyIndex == -1) return null;
+
+            int colonIndex = json.indexOf(":", keyIndex);
+            if (colonIndex == -1) return null;
+
+            // Find the quoted value
+            int quoteStart = json.indexOf("\"", colonIndex + 1);
+            if (quoteStart == -1) return null;
+
+            int quoteEnd = json.indexOf("\"", quoteStart + 1);
+            if (quoteEnd == -1) return null;
+
+            String valueStr = json.substring(quoteStart + 1, quoteEnd);
+            return Integer.parseInt(valueStr);
+        } catch (Exception e) {
+            LOGGER.error("Failed to parse version from JSON: {}", json, e);
+        }
+        return null;
+    }
+
+    /**
+     * Starts periodic background version refresh every 15 seconds.
+     * This ensures the launcher always has up-to-date version information.
+     * Should be called once during launcher initialization.
+     */
+    public static void startPeriodicVersionRefresh() {
+        if (versionRefreshScheduler != null) {
+            LOGGER.warn("Periodic version refresh already started, ignoring");
+            return;
+        }
+
+        LOGGER.info("=== STARTING PERIODIC VERSION REFRESH ===");
+        LOGGER.info("Client version will be refreshed every 15 seconds");
+
+        versionRefreshScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "VersionRefreshScheduler");
+            t.setDaemon(true); // Daemon thread won't prevent JVM shutdown
+            return t;
+        });
+
+        // Schedule periodic refresh every 15 seconds, starting after initial 15 second delay
+        versionRefreshScheduler.scheduleAtFixedRate(() -> {
+            try {
+                LOGGER.debug("Periodic version refresh triggered");
+                startBackgroundVersionFetch();
+            } catch (Exception e) {
+                LOGGER.error("Error during periodic version refresh", e);
+            }
+        }, 15, 15, TimeUnit.SECONDS);
+
+        LOGGER.info("Periodic version refresh scheduler started successfully");
+    }
+
+    /**
+     * Stops the periodic version refresh scheduler.
+     * Called during launcher shutdown (if needed).
+     */
+    public static void stopPeriodicVersionRefresh() {
+        if (versionRefreshScheduler != null) {
+            LOGGER.info("Stopping periodic version refresh");
+            versionRefreshScheduler.shutdown();
+            versionRefreshScheduler = null;
+        }
+    }
+
+    /**
+     * Get the cached remote version (for testing/debugging)
+     */
+    public static Integer getCachedRemoteVersion() {
+        return cachedRemoteVersion;
     }
 }

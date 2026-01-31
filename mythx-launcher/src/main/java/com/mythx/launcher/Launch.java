@@ -1,6 +1,7 @@
 package com.mythx.launcher;
 
 import com.mythx.launcher.cache.CacheDownloader;
+import com.mythx.launcher.components.impl.PlayNowButton;
 import com.mythx.launcher.download.Download;
 import com.mythx.launcher.fonts.LauncherFont;
 import com.mythx.launcher.handler.GlobalExceptionHandler;
@@ -114,6 +115,14 @@ public class Launch {
         launcherFrame.start();
 
         launcherSplash.dispose();
+
+        // Start background pre-fetching of client version to optimize Play Now response time
+        LOGGER.info("Starting initial background version fetch");
+        PlayNowButton.startBackgroundVersionFetch();
+
+        // Start periodic version refresh (every 15 seconds)
+        LOGGER.info("Starting periodic version refresh (every 15 seconds)");
+        PlayNowButton.startPeriodicVersionRefresh();
     }
 
     public static Download getDownload() {
