@@ -173,12 +173,28 @@ public class UpdateService {
         log.info("Starting download - URL: {}", fileURL);
         log.info("Save path: {}", savePath);
 
+        // Always delete existing file before download to ensure fresh download
+        // This prevents issues with corrupted/partial files from previous attempts
+        File existingFile = new File(savePath);
+        if (existingFile.exists()) {
+            log.info("Deleting existing file before fresh download: {}", savePath);
+            if (existingFile.delete()) {
+                log.info("Existing file deleted successfully");
+            } else {
+                log.warn("Failed to delete existing file - may cause download issues");
+            }
+        }
+
         CloseableHttpClient client = HttpClientConfig.getHttpClient();
         // Fix: Use & if URL already has query params, otherwise use ?
         String separator = fileURL.contains("?") ? "&" : "?";
         String cacheBustedUrl = fileURL + separator + "t=" + System.currentTimeMillis();
         log.info("Cache-busted URL: {}", cacheBustedUrl);
         HttpGet request = new HttpGet(cacheBustedUrl);
+        
+        // Add cache-busting headers to prevent CDN/proxy caching
+        request.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        request.setHeader("Pragma", "no-cache");
 
         try (CloseableHttpResponse response = client.execute(request)) {
             int statusCode = response.getStatusLine().getStatusCode();
