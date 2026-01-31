@@ -153,21 +153,49 @@ public class JdkDownloader {
             return cachedJdkPath;
         }
 
-        // Download JDK with progress window
+        // Check if download is already in progress (prevent duplicate downloads)
+        if (JdkDownloadWindow.isDownloadInProgress()) {
+            LOGGER.warn("JDK download already in progress, waiting...");
+            // Wait for existing download to complete
+            while (JdkDownloadWindow.isDownloadInProgress()) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            // After waiting, check if JDK was installed
+            javaExe = new File(getJavaExecutable());
+            if (javaExe.exists()) {
+                cachedJdkPath = getJavaExecutable();
+                LOGGER.info("JDK installed by other thread at: {}", cachedJdkPath);
+                return cachedJdkPath;
+            }
+        }
+
+        // Download JDK with progress window (use singleton)
         LOGGER.info("Downloading JDK 11 from {}", getJdkDownloadUrl());
-        JdkDownloadWindow downloadWindow = new JdkDownloadWindow();
-        downloadWindow.setVisible(true);
+        JdkDownloadWindow downloadWindow = JdkDownloadWindow.getInstance();
+        downloadWindow.reset();
+        downloadWindow.showWindow();
 
         try {
             downloadAndExtractJdk(downloadWindow);
             cachedJdkPath = getJavaExecutable();
             LOGGER.info("JDK 11 installed at: {}", cachedJdkPath);
+            
+            // Wait a moment before hiding window so user sees completion
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ignored) {}
+            
         } catch (Exception e) {
             LOGGER.error("Failed to download JDK", e);
             downloadWindow.setError("Failed to download Java: " + e.getMessage());
             throw new RuntimeException("Failed to download JDK 11", e);
         } finally {
-            downloadWindow.dispose();
+            downloadWindow.hideWindow();
         }
 
         return cachedJdkPath;
@@ -183,10 +211,13 @@ public class JdkDownloader {
         // Ensure directory exists
         new File(SETTINGS_DIR).mkdirs();
 
-        // Download ZIP
-        URL url = new URL(downloadUrl);
+        // Download ZIP with cache-busting
+        String cacheBustedUrl = downloadUrl + "?t=" + System.currentTimeMillis();
+        URL url = new URL(cacheBustedUrl);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestProperty("User-Agent", "MythX-Launcher");
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(30000);
 
         int contentLength = conn.getContentLength();
         if (contentLength == -1) {

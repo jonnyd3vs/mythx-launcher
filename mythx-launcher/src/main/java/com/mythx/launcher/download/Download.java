@@ -211,6 +211,7 @@ public class Download implements Runnable {
                 File downloadedFile = new File(LauncherSettings.SAVE_DIR + serverName);
                 if (!downloadedFile.exists()) {
                     LOGGER.error("Download complete but file does not exist: {}", downloadedFile.getAbsolutePath());
+                    Launch.clearDownload(); // Clear download on error
                     return;
                 }
                 LOGGER.info("Downloaded file size: {} bytes", downloadedFile.length());
@@ -224,6 +225,10 @@ public class Download implements Runnable {
                     }
                 }
                 
+                // Clear the download reference BEFORE launching client
+                // This allows new downloads to start after this one completes
+                Launch.clearDownload();
+                
                 // Now launch the client
                 LOGGER.info("Launching client after download...");
                 Utilities.launchClient(serverName);
@@ -232,14 +237,17 @@ public class Download implements Runnable {
             LOGGER.error("File access denied - path: {}, error: {}", LauncherSettings.SAVE_DIR + serverName, e.getMessage());
             LOGGER.error("This is likely a permissions issue or antivirus blocking. Check if {} is writable.", LauncherSettings.SAVE_DIR);
             downloadState = DownloadState.ERROR;
+            Launch.clearDownload(); // Clear download on error
             e.printStackTrace();
         } catch (java.security.AccessControlException e) {
             LOGGER.error("Security/permissions denied writing to: {}", LauncherSettings.SAVE_DIR + serverName);
             downloadState = DownloadState.ERROR;
+            Launch.clearDownload(); // Clear download on error
             e.printStackTrace();
         } catch (Exception e) {
             LOGGER.error("Download failed with exception: {} - {}", e.getClass().getSimpleName(), e.getMessage());
             downloadState = DownloadState.ERROR;
+            Launch.clearDownload(); // Clear download on error
             e.printStackTrace();
         } finally {
             if (file != null)

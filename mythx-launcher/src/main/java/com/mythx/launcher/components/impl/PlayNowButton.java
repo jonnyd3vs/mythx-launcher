@@ -7,6 +7,7 @@ import com.mythx.launcher.config.Config;
 import com.mythx.launcher.download.Download;
 import com.mythx.launcher.dto.ClientVersion;
 import com.mythx.launcher.jdk.JdkDownloader;
+import com.mythx.launcher.jdk.JdkDownloadWindow;
 import com.mythx.launcher.service.ClientVersionService;
 import com.mythx.launcher.utility.Utilities;
 import org.slf4j.Logger;
@@ -32,6 +33,9 @@ import java.util.concurrent.TimeUnit;
 public class PlayNowButton extends CreativeComponent {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlayNowButton.class);
     private String serverName;
+
+    // Prevent spam-clicking from launching multiple clients
+    private static volatile boolean isLaunching = false;
 
     // Background pre-fetching of client version to reduce Play Now wait time
     private static volatile Integer cachedRemoteVersion = null;
@@ -72,6 +76,26 @@ public class PlayNowButton extends CreativeComponent {
      * Check JDK installation and then launch the client
      */
     private void checkJdkAndLaunch() {
+        LOGGER.info("=== PLAY NOW BUTTON CLICKED ===");
+        
+        // Check if JDK download is in progress
+        if (JdkDownloadWindow.isDownloadInProgress()) {
+            LOGGER.warn("!!! PLAY NOW BLOCKED - JDK download in progress !!!");
+            LOGGER.warn("User must wait for JDK download to complete");
+            return;
+        }
+
+        // Check if already launching to prevent spam-clicking
+        if (isLaunching) {
+            LOGGER.warn("!!! LAUNCH BLOCKED - Already launching a client !!!");
+            LOGGER.warn("Ignoring Play Now click to prevent multiple clients");
+            return;
+        }
+
+        // Set launching flag immediately to prevent double-clicks during JDK download
+        isLaunching = true;
+        LOGGER.info("Set isLaunching flag to true");
+
         // Run in background thread to not block UI
         new Thread(() -> {
             try {
@@ -82,22 +106,34 @@ public class PlayNowButton extends CreativeComponent {
                     downloader.ensureJdk11Installed();
                 }
 
+                // Reset flag before calling launch() since launch() will handle its own state
+                isLaunching = false;
+                LOGGER.info("Reset isLaunching flag before launch()");
+
                 // Then check version and launch
                 launch();
             } catch (Exception e) {
                 LOGGER.error("Failed to check JDK or launch client", e);
+                isLaunching = false; // Reset flag on error
+                LOGGER.info("Reset isLaunching flag due to error");
             }
-        }).start();
+        }, "PlayNowJdkCheckThread").start();
     }
 
     /**
      * Check client version and launch
      */
     private void launch() {
+        // Check if a download is in progress
         if (Launch.getDownload() != null) {
-            LOGGER.info("Download already in progress");
+            LOGGER.warn("!!! LAUNCH BLOCKED - Download already in progress !!!");
+            LOGGER.warn("Cannot start new client launch while download is active");
             return;
         }
+
+        // Set launching flag to prevent concurrent launches
+        isLaunching = true;
+        LOGGER.info("Set isLaunching flag to true (launch entry)");
 
         // Ensure save directory exists before any file checks
         // Prevents "Access denied" errors on Windows when checking non-existent paths
@@ -149,46 +185,64 @@ public class PlayNowButton extends CreativeComponent {
      * Execute the launch with a given version (either cached or freshly fetched)
      */
     private void executeLaunchWithVersion(Integer remoteVersion, String clientUrl, String serverName, String clientFilename) {
-        if (remoteVersion == null) {
-            LOGGER.warn("Failed to fetch remote version, checking if client exists");
-            // If we can't get remote version, just try to launch existing client
-            File clientFile = new File(LauncherSettings.SAVE_DIR + clientFilename);
-            if (clientFile.exists()) {
-                Utilities.launchClient(clientFilename);
-                return;
+        try {
+            if (remoteVersion == null) {
+                LOGGER.warn("Failed to fetch remote version, checking if client exists");
+                // If we can't get remote version, just try to launch existing client
+                File clientFile = new File(LauncherSettings.SAVE_DIR + clientFilename);
+                if (clientFile.exists()) {
+                    Utilities.launchClient(clientFilename);
+                    return;
+                }
+                // No existing client, try to download anyway
+                remoteVersion = 0;
             }
-            // No existing client, try to download anyway
-            remoteVersion = 0;
-        }
 
-        // Get local version
-        Integer localVersion = Config.get().getClientVersions().get(serverName);
-        LOGGER.info("Local version: {}, Remote version: {}", localVersion, remoteVersion);
+            // Get local version
+            Integer localVersion = Config.get().getClientVersions().get(serverName);
+            LOGGER.info("Local version: {}, Remote version: {}", localVersion, remoteVersion);
 
-        // Check if we need to download
-        File clientFile = new File(LauncherSettings.SAVE_DIR + clientFilename);
-        boolean needsDownload = !clientFile.exists() ||
-                localVersion == null ||
-                localVersion < remoteVersion;
+            // Check if we need to download
+            File clientFile = new File(LauncherSettings.SAVE_DIR + clientFilename);
+            boolean needsDownload = !clientFile.exists() ||
+                    localVersion == null ||
+                    localVersion < remoteVersion;
 
-        if (needsDownload) {
-            LOGGER.info("Downloading new client version (file exists: {}, local version: {}, remote version: {})", 
-                    clientFile.exists(), localVersion, remoteVersion);
-            final int versionToSave = remoteVersion;
-            final String finalServerName = serverName;
+            if (needsDownload) {
+                LOGGER.info("Downloading new client version (file exists: {}, local version: {}, remote version: {})", 
+                        clientFile.exists(), localVersion, remoteVersion);
+                final int versionToSave = remoteVersion;
+                final String finalServerName = serverName;
 
-            // Start download - version is saved AFTER successful download, not before
-            Download download = Launch.resetDownload(clientUrl, clientFilename);
-            download.setOnComplete(() -> {
-                // Save version only after successful download
-                Config.get().getClientVersions().put(finalServerName, versionToSave);
-                ClientVersionService.saveVersion();
-                LOGGER.info("Download complete, saved version {} for {}", versionToSave, finalServerName);
-            });
-            download.start();
-        } else {
-            LOGGER.info("Client is up to date, launching existing (file: {})", clientFile.getAbsolutePath());
-            Utilities.launchClient(clientFilename);
+                // Clear any existing download before starting new one
+                Launch.clearDownload();
+
+                // Start download - version is saved AFTER successful download, not before
+                Download download = Launch.resetDownload(clientUrl, clientFilename);
+                download.setOnComplete(() -> {
+                    // Save version only after successful download
+                    Config.get().getClientVersions().put(finalServerName, versionToSave);
+                    ClientVersionService.saveVersion();
+                    LOGGER.info("Download complete, saved version {} for {}", versionToSave, finalServerName);
+                });
+                download.start();
+            } else {
+                LOGGER.info("Client is up to date, launching existing (file: {})", clientFile.getAbsolutePath());
+                Utilities.launchClient(clientFilename);
+            }
+        } finally {
+            // Always reset the flag after launch attempt completes
+            // Use a delay to allow the client process to fully start
+            new Thread(() -> {
+                try {
+                    Thread.sleep(2000); // Wait 2 seconds before allowing another launch
+                    isLaunching = false;
+                    LOGGER.info("Reset isLaunching flag to false after 2s delay");
+                } catch (InterruptedException e) {
+                    LOGGER.error("Interrupted while waiting to reset isLaunching flag", e);
+                    isLaunching = false;
+                }
+            }, "LaunchFlagResetThread").start();
         }
     }
 
@@ -418,6 +472,17 @@ public class PlayNowButton extends CreativeComponent {
             LOGGER.info("Stopping periodic version refresh");
             versionRefreshScheduler.shutdown();
             versionRefreshScheduler = null;
+        }
+    }
+
+    /**
+     * Resets the launching flag to allow a new launch.
+     * Called when user switches modes (e.g., Ctrl+B for beta mode).
+     */
+    public static void resetLaunchingFlag() {
+        if (isLaunching) {
+            LOGGER.info("Resetting isLaunching flag (was true, now false)");
+            isLaunching = false;
         }
     }
 

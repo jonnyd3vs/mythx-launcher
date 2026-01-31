@@ -6,6 +6,8 @@ import java.awt.*;
 /**
  * Progress window for JDK download
  * Shows download status, progress bar, and estimated time remaining
+ * 
+ * SINGLETON: Only one instance exists, tracks download-in-progress state
  */
 public class JdkDownloadWindow extends JFrame {
     private final JLabel statusLabel;
@@ -16,7 +18,32 @@ public class JdkDownloadWindow extends JFrame {
     private long totalBytes = 0;
     private long startTime = 0;
 
-    public JdkDownloadWindow() {
+    // Singleton instance and download tracking
+    private static volatile JdkDownloadWindow instance = null;
+    private static volatile boolean downloadInProgress = false;
+
+    /**
+     * Check if JDK download is currently in progress
+     */
+    public static boolean isDownloadInProgress() {
+        return downloadInProgress;
+    }
+
+    /**
+     * Get the singleton instance
+     */
+    public static JdkDownloadWindow getInstance() {
+        if (instance == null) {
+            synchronized (JdkDownloadWindow.class) {
+                if (instance == null) {
+                    instance = new JdkDownloadWindow();
+                }
+            }
+        }
+        return instance;
+    }
+
+    private JdkDownloadWindow() {
         super("Downloading Java 11");
 
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -67,6 +94,38 @@ public class JdkDownloadWindow extends JFrame {
 
         add(mainPanel);
         getContentPane().setBackground(new Color(45, 45, 48));
+    }
+
+    /**
+     * Show the window and mark download as in progress
+     */
+    public void showWindow() {
+        downloadInProgress = true;
+        SwingUtilities.invokeLater(() -> {
+            setVisible(true);
+            toFront();
+            requestFocus();
+        });
+    }
+
+    /**
+     * Hide the window and mark download as complete
+     */
+    public void hideWindow() {
+        downloadInProgress = false;
+        SwingUtilities.invokeLater(() -> setVisible(false));
+    }
+
+    /**
+     * Reset the window for a new download
+     */
+    public void reset() {
+        SwingUtilities.invokeLater(() -> {
+            progressBar.setValue(0);
+            progressLabel.setText("0%");
+            speedLabel.setText("");
+            statusLabel.setText("Preparing download...");
+        });
     }
 
     /**
