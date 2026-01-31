@@ -211,12 +211,8 @@ public class JdkDownloader {
         String downloadUrl = getJdkDownloadUrl();
         String zipPath = SETTINGS_DIR + getJdkZipName();
 
-        // Create target directory for JDK (e.g., ~/.mythx/java-11-windows-64/)
-        String targetDir = getJdkDir();
-        new File(targetDir).mkdirs();
-        LOGGER.info("Created JDK target directory: {}", targetDir);
-
         // Ensure settings dir exists for ZIP download
+        // ZIP contains java-11-windows-64/ folder already, so we extract to SETTINGS_DIR
         new File(SETTINGS_DIR).mkdirs();
 
         // Download ZIP with cache-busting using Apache HttpClient (more reliable than HttpURLConnection)
@@ -268,10 +264,10 @@ public class JdkDownloader {
             }
             LOGGER.info("ZIP file size: {} bytes", zipFile.length());
 
-            // Extract ZIP to target directory (not SETTINGS_DIR!)
+            // Extract ZIP to SETTINGS_DIR (ZIP contains java-11-windows-64/ folder already)
             window.setStatus("Extracting Java 11...");
-            LOGGER.info("Extracting JDK to: {}", targetDir);
-            extractZip(zipPath, targetDir);
+            LOGGER.info("Extracting JDK to: {}", SETTINGS_DIR);
+            extractZip(zipPath, SETTINGS_DIR);
 
             // Verify extraction succeeded
             File javaExe = new File(getJavaExecutable());
