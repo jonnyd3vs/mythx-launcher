@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.Path;
 
 public class Download implements Runnable {
     private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(Download.class);
@@ -42,12 +43,30 @@ public class Download implements Runnable {
     public void run() {
         LOGGER.info("Starting download: {} -> {}", url, LauncherSettings.SAVE_DIR + serverName);
 
-       File original = new File(LauncherSettings.SAVE_DIR + serverName);
+        // IMPORTANT: Create parent directories FIRST, before ANY file operations
+        // On some Windows systems, file operations on paths where parent doesn't exist
+        // can trigger "Access denied" instead of "File not found"
+        File saveDir = new File(LauncherSettings.SAVE_DIR);
+        if (!saveDir.exists()) {
+            boolean created = saveDir.mkdirs();
+            LOGGER.info("Created save directory: {} (success: {})", saveDir.getAbsolutePath(), created);
+            if (!created && !saveDir.exists()) {
+                LOGGER.error("Failed to create save directory: {}", saveDir.getAbsolutePath());
+                downloadState = DownloadState.ERROR;
+                return;
+            }
+        }
 
-       if(original != null && original.exists()) {
-           original.delete();
-           LOGGER.info("Deleted existing file: {}", original.getAbsolutePath());
-       }
+        // Migration: Clean up old .dat files from previous versions (now using .jar)
+        // Safe to do now that we know the directory exists
+        cleanupOldDatFiles();
+
+        // Delete existing file if present (safe now that directory exists)
+        File original = new File(LauncherSettings.SAVE_DIR + serverName);
+        if (original.exists()) {
+            boolean deleted = original.delete();
+            LOGGER.info("Deleted existing file: {} (success: {})", original.getAbsolutePath(), deleted);
+        }
 
         SPEED_TIMER = new Stopwatch();
 
@@ -102,32 +121,13 @@ public class Download implements Runnable {
               //  stateChanged();
             }
 
-            // Create parent directories if they don't exist
+            // Directory already created at start of run(), file already deleted if existed
             File outputFile = new File(LauncherSettings.SAVE_DIR + serverName);
-            if (outputFile.getParentFile() != null) {
-                boolean created = outputFile.getParentFile().mkdirs();
-                LOGGER.info("Created directories: {} for path: {}", created, outputFile.getParentFile().getAbsolutePath());
-            }
-            
-            // Delete existing file if it exists (might be locked by previous process)
-            if (outputFile.exists()) {
-                boolean deleted = outputFile.delete();
-                LOGGER.info("Deleted existing file: {} (success: {})", outputFile.getAbsolutePath(), deleted);
-                if (!deleted) {
-                    LOGGER.warn("Could not delete existing file - may be locked by another process");
-                    // Try garbage collection to release any file handles
-                    System.gc();
-                    Thread.sleep(100);
-                    deleted = outputFile.delete();
-                    LOGGER.info("Retry delete after GC: {}", deleted);
-                }
-            }
-            
-            // Log the full path we're about to write to
             LOGGER.info("Opening file for writing: {}", outputFile.getAbsolutePath());
 
-            // Always write fresh file from beginning (no resume)
-            file = new FileOutputStream(LauncherSettings.SAVE_DIR + serverName);
+            // Use NIO Path for better Windows compatibility
+            Path outputPath = outputFile.toPath();
+            file = new FileOutputStream(outputFile);
 
             stream = connection.getInputStream();
 
@@ -272,6 +272,21 @@ public class Download implements Runnable {
 
     private static String antiCache() {
         return RandomString.getAlphaNumericString(10);
+    }
+
+    /**
+     * Migration: Clean up old .dat files from previous launcher versions.
+     * We switched from .dat to .jar extension to avoid Windows Defender blocking.
+     */
+    private void cleanupOldDatFiles() {
+        String[] oldFiles = {"mythx.dat", "Beta_mythx.dat"};
+        for (String oldFile : oldFiles) {
+            File datFile = new File(LauncherSettings.SAVE_DIR + oldFile);
+            if (datFile.exists()) {
+                boolean deleted = datFile.delete();
+                LOGGER.info("Cleaned up old .dat file: {} (deleted: {})", datFile.getAbsolutePath(), deleted);
+            }
+        }
     }
 
     public boolean isPaused() {

@@ -87,12 +87,25 @@ public class PlayNowButton extends CreativeComponent {
             return;
         }
 
+        // Ensure save directory exists before any file checks
+        // Prevents "Access denied" errors on Windows when checking non-existent paths
+        File saveDir = new File(LauncherSettings.SAVE_DIR);
+        if (!saveDir.exists()) {
+            boolean created = saveDir.mkdirs();
+            LOGGER.info("Created save directory in launch(): {} (success: {})", saveDir.getAbsolutePath(), created);
+        }
+
         String clientUrl = LauncherSettings.getClientDownloadUrl();
         String serverName = LauncherSettings.getServerName();
         String clientFilename = LauncherSettings.getClientFilename();
 
         LOGGER.info("Beta mode: {}", LauncherSettings.BETA_MODE);
         LOGGER.info("Server name: {}, Client URL: {}", serverName, clientUrl);
+
+        // Reload local versions from file FRESH before comparing
+        // This ensures manual edits to client-version.json are detected
+        ClientVersionService.loadLocalVersions();
+        LOGGER.info("Reloaded local versions from file");
 
         // Fetch remote version from ECM API
         Integer remoteVersion = fetchRemoteVersion();

@@ -66,8 +66,9 @@ public class LauncherSettings {
 
     /**
      * Get the client filename for local storage
+     * Using .jar extension to avoid Windows Defender blocking (previously .dat triggered security)
      */
     public static String getClientFilename() {
-        return getServerName() + ".dat";
+        return getServerName() + ".jar";
     }
 }
