@@ -77,12 +77,18 @@ public class ErrorController {
 
         LOGGER.debug("Debug log content (length={})", mainContent != null ? mainContent.length() : 0);
 
-        // Only skip if BOTH debug and error content are empty
+        // ALWAYS send to API - even if logs are empty, we want to track closures
+        // If both are empty, add a marker so we know the launcher was closed
         if ((mainContent == null || mainContent.trim().isEmpty()) && 
             (errorContent == null || errorContent.trim().isEmpty())) {
-            LOGGER.info("No log content to send");
-            return;
+            LOGGER.info("No log content found, but still sending close event to API");
+            mainContent = "[LAUNCHER_CLOSED] No debug logs found at: " + PATH_TO_DEBUG_LOG;
+            errorContent = "[LAUNCHER_CLOSED] No error logs found at: " + PATH_TO_ERROR_LOG;
         }
+
+        System.out.println("[DEBUG] Preparing to send to API: " + ERROR_URL);
+        System.out.println("[DEBUG] Error content length: " + (errorContent != null ? errorContent.length() : 0));
+        System.out.println("[DEBUG] Main content length: " + (mainContent != null ? mainContent.length() : 0));
 
         try (CloseableHttpClient closeableHttpClient = HttpClients.createDefault()) {
             HttpPost error = new HttpPost(ERROR_URL);
@@ -106,11 +112,17 @@ public class ErrorController {
             LOGGER.info("Sending logs to API (error: {} chars, main: {} chars)", 
                     errorContent != null ? errorContent.length() : 0,
                     mainContent != null ? mainContent.length() : 0);
+            System.out.println("[DEBUG] Executing HTTP POST to: " + ERROR_URL);
             CloseableHttpResponse response = closeableHttpClient.execute(error); // call to API
-            LOGGER.info("Logs sent to server. Status: {}", response.getStatusLine().getStatusCode());
+            int statusCode = response.getStatusLine().getStatusCode();
+            LOGGER.info("Logs sent to server. Status: {}", statusCode);
+            System.out.println("[DEBUG] API Response status: " + statusCode);
+            System.out.println("[DEBUG] API call completed successfully!");
 
         } catch (IOException e) {
             LOGGER.warn("Couldn't send logs: {}", e.getMessage(), e);
+            System.out.println("[DEBUG] API call FAILED: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
