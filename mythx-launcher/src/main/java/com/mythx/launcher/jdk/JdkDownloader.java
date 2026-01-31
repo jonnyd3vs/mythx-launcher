@@ -208,16 +208,25 @@ public class JdkDownloader {
         String downloadUrl = getJdkDownloadUrl();
         String zipPath = SETTINGS_DIR + getJdkZipName();
 
-        // Ensure directory exists
-        new File(SETTINGS_DIR).mkdirs();
+        // Create target directory for JDK (e.g., ~/.mythx/java-11-windows-64/)
+        String targetDir = getJdkDir();
+        new File(targetDir).mkdirs();
+        LOGGER.info("Created JDK target directory: {}", targetDir);
 
         // Download ZIP with cache-busting
         String cacheBustedUrl = downloadUrl + "?t=" + System.currentTimeMillis();
+        LOGGER.info("Downloading JDK from: {}", cacheBustedUrl);
         URL url = new URL(cacheBustedUrl);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestProperty("User-Agent", "MythX-Launcher");
         conn.setConnectTimeout(30000);
         conn.setReadTimeout(30000);
+
+        int responseCode = conn.getResponseCode();
+        LOGGER.info("HTTP response code: {}", responseCode);
+        if (responseCode != 200) {
+            throw new IOException("Failed to download JDK: HTTP " + responseCode);
+        }
 
         int contentLength = conn.getContentLength();
         if (contentLength == -1) {
@@ -227,6 +236,7 @@ public class JdkDownloader {
                 contentLength = Integer.parseInt(gcsLength);
             }
         }
+        LOGGER.info("Content length: {} bytes", contentLength);
 
         window.setStatus("Downloading Java 11...");
         window.setTotalBytes(contentLength);
@@ -243,14 +253,32 @@ public class JdkDownloader {
                 totalRead += bytesRead;
                 window.setBytesDownloaded(totalRead);
             }
+            LOGGER.info("Downloaded {} bytes to {}", totalRead, zipPath);
         }
 
-        // Extract ZIP
+        // Verify ZIP file exists and has content
+        File zipFile = new File(zipPath);
+        if (!zipFile.exists() || zipFile.length() == 0) {
+            throw new IOException("ZIP file is empty or missing: " + zipPath);
+        }
+        LOGGER.info("ZIP file size: {} bytes", zipFile.length());
+
+        // Extract ZIP to target directory (not SETTINGS_DIR!)
         window.setStatus("Extracting Java 11...");
-        extractZip(zipPath, SETTINGS_DIR);
+        LOGGER.info("Extracting JDK to: {}", targetDir);
+        extractZip(zipPath, targetDir);
+
+        // Verify extraction succeeded
+        File javaExe = new File(getJavaExecutable());
+        LOGGER.info("Checking for java executable at: {}", javaExe.getAbsolutePath());
+        if (!javaExe.exists()) {
+            LOGGER.error("Extraction failed - java executable not found!");
+            throw new IOException("Extraction failed - java.exe not found at: " + javaExe.getAbsolutePath());
+        }
 
         // Delete ZIP after extraction
-        new File(zipPath).delete();
+        zipFile.delete();
+        LOGGER.info("Deleted temp ZIP file");
         window.setStatus("Java 11 installed successfully");
     }
 
@@ -258,18 +286,26 @@ public class JdkDownloader {
      * Extract ZIP file to destination directory
      */
     private void extractZip(String zipPath, String destDir) throws IOException {
+        File destDirFile = new File(destDir);
         try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipPath))) {
             ZipEntry entry;
             byte[] buffer = new byte[8192];
+            int filesExtracted = 0;
 
             while ((entry = zis.getNextEntry()) != null) {
-                File destFile = new File(destDir + entry.getName());
+                // Use proper path construction with Zip Slip protection
+                File destFile = newFile(destDirFile, entry);
 
                 if (entry.isDirectory()) {
-                    destFile.mkdirs();
+                    if (!destFile.isDirectory() && !destFile.mkdirs()) {
+                        throw new IOException("Failed to create directory: " + destFile);
+                    }
                 } else {
                     // Ensure parent directory exists
-                    destFile.getParentFile().mkdirs();
+                    File parent = destFile.getParentFile();
+                    if (!parent.isDirectory() && !parent.mkdirs()) {
+                        throw new IOException("Failed to create parent directory: " + parent);
+                    }
 
                     try (FileOutputStream fos = new FileOutputStream(destFile)) {
                         int len;
@@ -277,10 +313,33 @@ public class JdkDownloader {
                             fos.write(buffer, 0, len);
                         }
                     }
+
+                    // Set executable permissions for bin/ files on Unix-like systems
+                    if (entry.getName().contains("/bin/") || entry.getName().contains("\\bin\\")) {
+                        destFile.setExecutable(true, false);
+                    }
+                    filesExtracted++;
                 }
                 zis.closeEntry();
             }
+            LOGGER.info("Extracted {} files to {}", filesExtracted, destDir);
         }
+    }
+
+    /**
+     * Safely create destination file with Zip Slip vulnerability protection
+     */
+    private File newFile(File destinationDir, ZipEntry zipEntry) throws IOException {
+        File destFile = new File(destinationDir, zipEntry.getName());
+
+        String destDirPath = destinationDir.getCanonicalPath();
+        String destFilePath = destFile.getCanonicalPath();
+
+        if (!destFilePath.startsWith(destDirPath + File.separator) && !destFilePath.equals(destDirPath)) {
+            throw new IOException("Entry is outside of the target dir: " + zipEntry.getName());
+        }
+
+        return destFile;
     }
 
     /**
