@@ -11,5 +11,8 @@ public class GlobalExceptionHandler implements Thread.UncaughtExceptionHandler {
     @Override
     public void uncaughtException(Thread t, Throwable e) {
         LOGGER.error("Thread: {} \n threw exception: {}", t.getName(), e.getMessage(), e);
+
+        // Send error to API asynchronously to avoid blocking
+        ErrorController.sendErrorAsync("unknown", e);
     }
 }

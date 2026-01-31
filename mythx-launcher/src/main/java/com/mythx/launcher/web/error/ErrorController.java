@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -34,7 +36,41 @@ public class ErrorController {
 
 
     public static void sendError(String username) {
-        String errorContent = FileOperations.readFileToString(PATH_TO_ERRORS_FILE); // read error logs from file
+        sendError(username, null);
+    }
+
+    public static void sendError(String username, Throwable exception) {
+        String errorContent;
+
+        if (exception != null) {
+            // Convert exception to string directly - this is the key fix!
+            // When running from IDE, log files may be buffered and not written yet,
+            // so we need to capture the exception directly.
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            exception.printStackTrace(pw);
+            pw.flush();
+            pw.close();
+            errorContent = sw.toString();
+
+            // If stack trace is empty, at least capture the message
+            if (errorContent == null || errorContent.trim().isEmpty()) {
+                errorContent = exception.getClass().getName() + ": " + exception.getMessage();
+            }
+
+            LOGGER.debug("Captured exception content (length={})", 
+                    errorContent != null ? errorContent.length() : 0);
+        } else {
+            // Fall back to reading from file
+            errorContent = FileOperations.readFileToString(PATH_TO_ERRORS_FILE);
+            LOGGER.debug("Read error content from file (length={})", 
+                    errorContent != null ? errorContent.length() : 0);
+        }
+
+        if (errorContent == null || errorContent.trim().isEmpty()) {
+            LOGGER.info("No errors to send");
+            return;
+        }
 
         try (CloseableHttpClient closeableHttpClient = HttpClients.createDefault()) {
             HttpPost error = new HttpPost(ERROR_URL);
@@ -54,13 +90,21 @@ public class ErrorController {
 
             error.setEntity(entity);  //set entity to HttpPost
 
+            LOGGER.info("Sending error to API (content length: {} chars)", errorContent.length());
             CloseableHttpResponse response = closeableHttpClient.execute(error); // call to API
-            LOGGER.info("ERROR was sent to server");
-            LOGGER.info("Response status code:  " + response.getStatusLine().getStatusCode());
+            LOGGER.info("ERROR was sent to server. Status: {}", response.getStatusLine().getStatusCode());
 
         } catch (IOException e) {
-            LOGGER.warn(e.getMessage(), "Couldn't send error", e);
+            LOGGER.warn("Couldn't send error: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * Send error asynchronously to avoid blocking the main thread.
+     * This is critical for uncaught exception handlers.
+     */
+    public static void sendErrorAsync(String username, Throwable exception) {
+        new Thread(() -> sendError(username, exception), "ErrorSender").start();
     }
 
     // returns an IP address determined by another API
@@ -76,8 +120,8 @@ public class ErrorController {
 
             return ip;
         } catch (IOException e) {
-            System.out.println("Couldn't send error " + e);
-            return "undefined IP address";
+            LOGGER.warn("Couldn't get IP address: {}", e.getMessage());
+            return "unknown";
         }
     }
 }
