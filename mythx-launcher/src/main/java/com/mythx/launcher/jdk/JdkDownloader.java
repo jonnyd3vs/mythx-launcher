@@ -210,15 +210,11 @@ public class JdkDownloader {
     private void downloadAndExtractJdk(JdkDownloadWindow window) throws IOException {
         String downloadUrl = getJdkDownloadUrl();
         String zipPath = SETTINGS_DIR + getJdkZipName();
-        
-        // Target directory for extraction - ZIP contains bin/, lib/ at root (no parent folder)
-        // So we must extract to .mythx/java-11-windows-64/ to get .mythx/java-11-windows-64/bin/java.exe
-        String targetDir = getJdkDir();
 
-        // Ensure directories exist
+        // Ensure base directory exists
         new File(SETTINGS_DIR).mkdirs();
-        new File(targetDir).mkdirs();
-        LOGGER.info("Target JDK directory: {}", targetDir);
+        LOGGER.info("Base settings directory: {}", SETTINGS_DIR);
+        LOGGER.info("Expected JDK directory after extraction: {}", getJdkDir());
 
         // Download ZIP with cache-busting using Apache HttpClient (more reliable than HttpURLConnection)
         String cacheBustedUrl = downloadUrl + "?t=" + System.currentTimeMillis();
@@ -269,10 +265,11 @@ public class JdkDownloader {
             }
             LOGGER.info("ZIP file size: {} bytes", zipFile.length());
 
-            // Extract ZIP to targetDir (java-11-windows-64/) - ZIP has bin/, lib/ at root
+            // Extract ZIP to SETTINGS_DIR - ZIP already contains java-11-windows-64/ folder
+            // This creates: .mythx/java-11-windows-64/bin/java.exe
             window.setStatus("Extracting Java 11...");
-            LOGGER.info("Extracting JDK to: {}", targetDir);
-            extractZip(zipPath, targetDir);
+            LOGGER.info("Extracting JDK to: {}", SETTINGS_DIR);
+            extractZip(zipPath, SETTINGS_DIR);
 
             // Verify extraction succeeded
             String expectedJavaPath = getJavaExecutable();
@@ -282,20 +279,20 @@ public class JdkDownloader {
             if (!javaExe.exists()) {
                 LOGGER.error("Extraction failed - java executable not found at expected location!");
                 // List what was extracted for debugging
-                File targetDirFile = new File(targetDir);
-                File[] extracted = targetDirFile.listFiles();
+                File jdkDir = new File(getJdkDir());
+                File[] extracted = jdkDir.listFiles();
                 if (extracted != null && extracted.length > 0) {
-                    LOGGER.error("Contents of {}: ", targetDir);
+                    LOGGER.error("Contents of {}: ", getJdkDir());
                     for (File f : extracted) {
                         LOGGER.error("  - {} (dir={})", f.getName(), f.isDirectory());
                     }
                 } else {
-                    LOGGER.error("Target directory is empty or doesn't exist: {}", targetDir);
+                    LOGGER.error("JDK directory is empty or doesn't exist: {}", getJdkDir());
                 }
-                // Also check if maybe it extracted to wrong location
-                File wrongLocation = new File(SETTINGS_DIR + "bin" + File.separator + "java.exe");
-                if (wrongLocation.exists()) {
-                    LOGGER.error("Found java.exe at WRONG location: {}", wrongLocation.getAbsolutePath());
+                // Check for double-nesting issue
+                File doubleNested = new File(getJdkDir() + getJdkDirName() + File.separator + "bin" + File.separator + "java.exe");
+                if (doubleNested.exists()) {
+                    LOGGER.error("DOUBLE NESTING DETECTED! Found at: {}", doubleNested.getAbsolutePath());
                 }
                 throw new IOException("Extraction failed - java.exe not found at: " + javaExe.getAbsolutePath());
             }
