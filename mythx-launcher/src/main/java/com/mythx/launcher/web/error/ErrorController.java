@@ -121,21 +121,23 @@ public class ErrorController {
             params.add(new BasicNameValuePair("username",
                     username == null || username.isEmpty() ? "unknown" : username));
             params.add(new BasicNameValuePair("error_body", errorContent != null ? errorContent : ""));
-            params.add(new BasicNameValuePair("main_body", mainContent != null ? mainContent : ""));
             
-            // Include captured client output (first 5 seconds after launch)
+            // Append captured client output to main_body
             String clientOutput = Utilities.getClientOutput();
-            params.add(new BasicNameValuePair("client_output", clientOutput != null ? clientOutput : ""));
+            String fullMainContent = mainContent != null ? mainContent : "";
+            if (clientOutput != null && !clientOutput.isEmpty()) {
+                fullMainContent += "\n\n=== CLIENT OUTPUT (first 5 seconds) ===\n" + clientOutput;
+            }
+            params.add(new BasicNameValuePair("main_body", fullMainContent));
 
             // set parameters to entity
             HttpEntity entity = new UrlEncodedFormEntity(params, StandardCharsets.UTF_8);
 
             error.setEntity(entity);  //set entity to HttpPost
 
-            LOGGER.info("Sending logs to API (error: {} chars, main: {} chars, client: {} chars)", 
+            LOGGER.info("Sending logs to API (error: {} chars, main: {} chars)", 
                     errorContent != null ? errorContent.length() : 0,
-                    mainContent != null ? mainContent.length() : 0,
-                    clientOutput != null ? clientOutput.length() : 0);
+                    fullMainContent.length());
             System.out.println("[DEBUG] Executing HTTP POST to: " + ERROR_URL);
             CloseableHttpResponse response = closeableHttpClient.execute(error); // call to API
             int statusCode = response.getStatusLine().getStatusCode();
