@@ -3,6 +3,7 @@ package com.mythx.launcher.web.error;
 import ch.qos.logback.classic.LoggerContext;
 import com.mythx.launcher.LauncherSettings;
 import com.mythx.launcher.config.Config;
+import com.mythx.launcher.utility.Utilities;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -121,15 +122,20 @@ public class ErrorController {
                     username == null || username.isEmpty() ? "unknown" : username));
             params.add(new BasicNameValuePair("error_body", errorContent != null ? errorContent : ""));
             params.add(new BasicNameValuePair("main_body", mainContent != null ? mainContent : ""));
+            
+            // Include captured client output (first 5 seconds after launch)
+            String clientOutput = Utilities.getClientOutput();
+            params.add(new BasicNameValuePair("client_output", clientOutput != null ? clientOutput : ""));
 
             // set parameters to entity
             HttpEntity entity = new UrlEncodedFormEntity(params, StandardCharsets.UTF_8);
 
             error.setEntity(entity);  //set entity to HttpPost
 
-            LOGGER.info("Sending logs to API (error: {} chars, main: {} chars)", 
+            LOGGER.info("Sending logs to API (error: {} chars, main: {} chars, client: {} chars)", 
                     errorContent != null ? errorContent.length() : 0,
-                    mainContent != null ? mainContent.length() : 0);
+                    mainContent != null ? mainContent.length() : 0,
+                    clientOutput != null ? clientOutput.length() : 0);
             System.out.println("[DEBUG] Executing HTTP POST to: " + ERROR_URL);
             CloseableHttpResponse response = closeableHttpClient.execute(error); // call to API
             int statusCode = response.getStatusLine().getStatusCode();

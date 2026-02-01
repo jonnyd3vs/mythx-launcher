@@ -25,6 +25,29 @@ public class Utilities {
 
     // Cached JDK path
     private static String cachedJavaPath = null;
+    
+    // Client output capture (last 5 seconds after launch)
+    private static final StringBuilder clientOutput = new StringBuilder();
+    private static final int CLIENT_OUTPUT_CAPTURE_SECONDS = 5;
+    private static final int CLIENT_OUTPUT_MAX_CHARS = 50000;
+    
+    /**
+     * Get captured client output (for error reporting)
+     */
+    public static String getClientOutput() {
+        synchronized (clientOutput) {
+            return clientOutput.toString();
+        }
+    }
+    
+    /**
+     * Clear captured client output
+     */
+    public static void clearClientOutput() {
+        synchronized (clientOutput) {
+            clientOutput.setLength(0);
+        }
+    }
 
     public static int getPercent(int current, int pixels) {
         return (int) ((pixels) * .01 * current);
@@ -133,24 +156,60 @@ public class Utilities {
             Process p = pb.start();
             LOGGER.info("Client process started successfully (PID available: {})", p.isAlive());
             
+            // Clear previous client output
+            clearClientOutput();
+            
+            // Start background thread to capture client output for 5 seconds
+            final Process process = p;
+            new Thread(() -> {
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(process.getInputStream()))) {
+                    long endTime = System.currentTimeMillis() + (CLIENT_OUTPUT_CAPTURE_SECONDS * 1000);
+                    String line;
+                    
+                    while (System.currentTimeMillis() < endTime) {
+                        // Check if there's data available (non-blocking check)
+                        if (reader.ready()) {
+                            line = reader.readLine();
+                            if (line != null) {
+                                synchronized (clientOutput) {
+                                    if (clientOutput.length() < CLIENT_OUTPUT_MAX_CHARS) {
+                                        clientOutput.append(line).append("\n");
+                                        LOGGER.debug("Client: {}", line);
+                                    }
+                                }
+                            }
+                        } else {
+                            // No data available, sleep briefly
+                            Thread.sleep(100);
+                        }
+                        
+                        // If process died, read remaining output and exit
+                        if (!process.isAlive()) {
+                            while (reader.ready() && (line = reader.readLine()) != null) {
+                                synchronized (clientOutput) {
+                                    if (clientOutput.length() < CLIENT_OUTPUT_MAX_CHARS) {
+                                        clientOutput.append(line).append("\n");
+                                    }
+                                }
+                            }
+                            int exitCode = process.exitValue();
+                            LOGGER.error("Client process exited with code: {}", exitCode);
+                            break;
+                        }
+                    }
+                    
+                    LOGGER.info("Client output capture complete ({} chars)", clientOutput.length());
+                } catch (Exception e) {
+                    LOGGER.warn("Error capturing client output: {}", e.getMessage());
+                }
+            }, "ClientOutputCapture").start();
+            
             // Give the process a moment to fail if it's going to fail immediately
             Thread.sleep(500);
             if (!p.isAlive()) {
                 int exitCode = p.exitValue();
                 LOGGER.error("Client process exited immediately with code: {}", exitCode);
-                
-                // Try to read any error output
-                try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                        new java.io.InputStreamReader(p.getInputStream()))) {
-                    String line;
-                    StringBuilder output = new StringBuilder();
-                    while ((line = reader.readLine()) != null) {
-                        output.append(line).append("\n");
-                    }
-                    if (output.length() > 0) {
-                        LOGGER.error("Client output: {}", output.toString());
-                    }
-                }
             } else {
                 LOGGER.info("Client is running successfully");
             }
