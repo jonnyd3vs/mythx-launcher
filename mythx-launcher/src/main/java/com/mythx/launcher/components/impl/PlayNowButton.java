@@ -397,7 +397,14 @@ public class PlayNowButton extends CreativeComponent {
                     versionFetchComplete = true;
                 }
             } catch (Exception e) {
-                LOGGER.error("Background version fetch failed", e);
+                // For common network errors, just log the message (no stack trace spam)
+                if (e instanceof java.net.SocketTimeoutException || 
+                    e instanceof java.net.UnknownHostException ||
+                    e instanceof java.net.ConnectException) {
+                    LOGGER.warn("Background version fetch failed: {} - {}", e.getClass().getSimpleName(), e.getMessage());
+                } else {
+                    LOGGER.error("Background version fetch failed", e);
+                }
                 versionFetchComplete = true; // Mark as complete even on error so launch can proceed
             } finally {
                 versionFetchInProgress = false;
