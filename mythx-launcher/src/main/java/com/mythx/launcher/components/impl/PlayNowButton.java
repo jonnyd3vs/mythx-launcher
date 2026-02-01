@@ -335,13 +335,13 @@ public class PlayNowButton extends CreativeComponent {
 
         versionFetchInProgress = true;
         versionFetchComplete = false; // Reset to indicate fresh fetch
-        LOGGER.info("=== STARTING BACKGROUND VERSION FETCH ===");
-        LOGGER.info("Pre-fetching client version data to optimize Play Now response time");
+        LOGGER.debug("=== STARTING BACKGROUND VERSION FETCH ===");
+        LOGGER.debug("Pre-fetching client version data to optimize Play Now response time");
 
         new Thread(() -> {
             try {
                 String versionUrl = Config.get().getClientVersionUrl() + "?projectId=" + Config.get().getProjectId();
-                LOGGER.info("Background fetch - connecting to: {}", versionUrl);
+                LOGGER.debug("Background fetch - connecting to: {}", versionUrl);
 
                 long startTime = System.currentTimeMillis();
 
@@ -371,7 +371,7 @@ public class PlayNowButton extends CreativeComponent {
                     if (version != null) {
                         cachedRemoteVersion = version;
                         long duration = System.currentTimeMillis() - startTime;
-                        LOGGER.info("Background fetch complete in {}ms - Remote version: {}", duration, cachedRemoteVersion);
+                        LOGGER.debug("Background fetch complete in {}ms - Remote version: {}", duration, cachedRemoteVersion);
                         versionFetchComplete = true;
 
                         // If user clicked Play Now while we were fetching, execute the pending launch
@@ -401,7 +401,7 @@ public class PlayNowButton extends CreativeComponent {
                 versionFetchComplete = true; // Mark as complete even on error so launch can proceed
             } finally {
                 versionFetchInProgress = false;
-                LOGGER.info("Background version fetch thread completed");
+                LOGGER.debug("Background version fetch thread completed");
             }
         }, "VersionPreFetchThread").start();
     }
