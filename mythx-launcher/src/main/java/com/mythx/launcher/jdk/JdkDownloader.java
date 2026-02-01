@@ -316,13 +316,14 @@ public class JdkDownloader {
                     }
                 } else {
                     LOGGER.error("JDK directory is empty or doesn't exist: {}", getJdkDir());
+                    LOGGER.error("This is often caused by antivirus software blocking Java extraction");
                 }
                 // Check for double-nesting issue
                 File doubleNested = new File(getJdkDir() + getJdkDirName() + File.separator + "bin" + File.separator + "java.exe");
                 if (doubleNested.exists()) {
                     LOGGER.error("DOUBLE NESTING DETECTED! Found at: {}", doubleNested.getAbsolutePath());
                 }
-                throw new IOException("Extraction failed - java.exe not found at: " + javaExe.getAbsolutePath());
+                throw new IOException("Java extraction failed. Your antivirus may be blocking it. Try adding " + SETTINGS_DIR + " to your antivirus exclusions.");
             }
             
             LOGGER.info("SUCCESS: java.exe verified at {}", javaExe.getAbsolutePath());
