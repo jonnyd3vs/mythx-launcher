@@ -80,15 +80,15 @@ public class PlayNowButton extends CreativeComponent {
         
         // Check if JDK download is in progress
         if (JdkDownloadWindow.isDownloadInProgress()) {
-            LOGGER.warn("!!! PLAY NOW BLOCKED - JDK download in progress !!!");
-            LOGGER.warn("User must wait for JDK download to complete");
+            LOGGER.debug("Play Now blocked - JDK download in progress");
+            LOGGER.debug("User must wait for JDK download to complete");
             return;
         }
 
         // Check if already launching to prevent spam-clicking
         if (isLaunching) {
-            LOGGER.warn("!!! LAUNCH BLOCKED - Already launching a client !!!");
-            LOGGER.warn("Ignoring Play Now click to prevent multiple clients");
+            LOGGER.debug("Launch blocked - already launching a client");
+            LOGGER.debug("Ignoring Play Now click to prevent multiple clients");
             return;
         }
 
@@ -126,8 +126,8 @@ public class PlayNowButton extends CreativeComponent {
     private void launch() {
         // Check if a download is in progress
         if (Launch.getDownload() != null) {
-            LOGGER.warn("!!! LAUNCH BLOCKED - Download already in progress !!!");
-            LOGGER.warn("Cannot start new client launch while download is active");
+            LOGGER.debug("Launch blocked - download already in progress");
+            LOGGER.debug("Cannot start new client launch while download is active");
             return;
         }
 
@@ -440,12 +440,11 @@ public class PlayNowButton extends CreativeComponent {
      */
     public static void startPeriodicVersionRefresh() {
         if (versionRefreshScheduler != null) {
-            LOGGER.warn("Periodic version refresh already started, ignoring");
+            LOGGER.debug("Periodic version refresh already started, ignoring");
             return;
         }
 
-        LOGGER.info("=== STARTING PERIODIC VERSION REFRESH ===");
-        LOGGER.info("Client version will be refreshed every 15 seconds");
+        LOGGER.debug("Starting periodic version refresh (every 15 seconds)");
 
         versionRefreshScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "VersionRefreshScheduler");
