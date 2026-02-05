@@ -345,8 +345,8 @@ public class PlayNowButton extends CreativeComponent {
 
                 long startTime = System.currentTimeMillis();
 
-                // Force TLS 1.2 for older Java versions (Java 8 may default to older TLS)
-                System.setProperty("https.protocols", "TLSv1.2,TLSv1.3");
+                // Force TLS 1.2 (TLS 1.3 not supported on Java 8)
+                System.setProperty("https.protocols", "TLSv1.2");
                 
                 URL url = new URL(versionUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
